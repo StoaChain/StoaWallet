@@ -1,0 +1,214 @@
+.modal {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--color-stoa-dark);
+  color: var(--color-stoa-light);
+  font-family: var(--font-sans);
+}
+
+/* Stake / unstake mode toggle — two gold-outline segments, the active one filled. */
+.modeToggle {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.modeButton {
+  flex: 1 1 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-stoa-gold);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.modeButtonActive {
+  background: var(--color-stoa-gold);
+  color: #0a0a0a;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.labelText {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--color-stoa-slate);
+}
+
+.amountGlyph {
+  font-size: 1rem;
+}
+
+.input {
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.5rem;
+  background: var(--color-stoa-surface);
+  color: var(--color-stoa-light);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9375rem;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-stoa-gold);
+}
+
+/* Max affordance — a compact gold link-button beside the amount label. */
+.maxButton {
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-stoa-gold);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Vault-total-unknown: a distinct fail-closed note, NOT a max button. */
+.maxUnavailable {
+  font-size: 0.6875rem;
+  color: var(--color-stoa-slate);
+}
+
+/* The 1.0-must-remain last-staker floor note. */
+.floorNote {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-stoa-slate);
+}
+
+/* Gasless pill — gold-tinted per DESIGN.md: tinted bg, gold border + text. */
+.gaslessBadge {
+  align-self: flex-start;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 999px;
+  background: #2a2410;
+  color: var(--color-stoa-gold);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.primary {
+  padding: 0.6875rem 1rem;
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 0.5rem;
+  background: var(--color-stoa-gold);
+  color: #0a0a0a;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondary {
+  padding: 0.6875rem 1rem;
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-stoa-gold);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+/* Status chip — info tinted (semantic/10 bg + /40 border per DESIGN.md). */
+.stage {
+  padding: 0.625rem 0.75rem;
+  border: 1px solid rgb(59 130 246 / 0.4);
+  border-radius: 0.5rem;
+  background: rgb(59 130 246 / 0.1);
+  color: var(--color-status-info);
+  font-size: 0.875rem;
+}
+
+.success {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem;
+  border: 1px solid rgb(74 222 128 / 0.4);
+  border-radius: 0.5rem;
+  background: rgb(74 222 128 / 0.1);
+}
+
+.successText {
+  margin: 0;
+  color: var(--color-status-success);
+  font-weight: 600;
+}
+
+.requestKey {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-stoa-slate);
+  word-break: break-all;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.pending {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem;
+  border: 1px solid rgb(212 175 55 / 0.4);
+  border-radius: 0.5rem;
+  background: rgb(212 175 55 / 0.1);
+}
+
+.pendingText {
+  margin: 0;
+  color: var(--color-stoa-gold);
+}
+
+.error {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem;
+  border: 1px solid rgb(239 68 68 / 0.4);
+  border-radius: 0.5rem;
+  background: rgb(239 68 68 / 0.1);
+}
+
+.errorText {
+  margin: 0;
+  color: var(--color-status-danger);
+}
+
+.lockedText {
+  margin: 0;
+  color: var(--color-stoa-slate);
+}

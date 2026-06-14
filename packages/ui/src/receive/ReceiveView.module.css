@@ -1,0 +1,81 @@
+.view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--color-stoa-dark);
+  color: var(--color-stoa-light);
+  font-family: var(--font-sans);
+  text-align: center;
+}
+
+.heading {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-stoa-light);
+}
+
+.subheading {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--color-stoa-slate);
+}
+
+/* Light quiet-zone around the QR so it scans reliably even on the dark theme. */
+.qrFrame {
+  display: inline-flex;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  background: #ffffff;
+}
+
+.qr {
+  display: block;
+}
+
+/* The full, selectable address — mono for legibility, wrapped (NOT truncated)
+   so the user can hand-select the entire key. */
+.address {
+  margin: 0;
+  max-width: 22rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.5rem;
+  background: var(--color-stoa-surface);
+  color: var(--color-stoa-light);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  word-break: break-all;
+  user-select: all;
+}
+
+/* Secondary action = gold outline, per the Phase-2/3 convention. */
+.copy {
+  appearance: none;
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: var(--color-stoa-gold);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.copy:hover {
+  background: var(--color-stoa-surface);
+}
+
+.idle {
+  padding: 1.5rem 1rem;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.75rem;
+  background: var(--color-stoa-surface);
+  color: var(--color-stoa-slate);
+  text-align: center;
+}

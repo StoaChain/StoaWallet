@@ -1,0 +1,279 @@
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--color-stoa-dark);
+  color: var(--color-stoa-light);
+  font-family: var(--font-sans);
+}
+
+.heading {
+  margin: 0;
+  font-size: 1.125rem;
+  color: var(--color-stoa-gold);
+}
+
+.subheading {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-stoa-slate);
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.labelText {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--color-stoa-slate);
+}
+
+.input {
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.5rem;
+  background: var(--color-stoa-surface);
+  color: var(--color-stoa-light);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9375rem;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-stoa-gold);
+}
+
+.input:disabled {
+  opacity: 0.6;
+}
+
+/* Gasless disclosure — gold-tinted info chip per DESIGN.md (matches Phase-4/5). */
+.gasless {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 0.5rem;
+  background: #2a2410;
+  color: var(--color-stoa-gold);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.sourceList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.empty {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-stoa-slate);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.75rem;
+  background: var(--color-stoa-surface);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.chainTag {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.balance {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875rem;
+  color: var(--color-stoa-light);
+}
+
+.amountGlyph {
+  font-size: 1rem;
+}
+
+.amountRow {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.amountRow .input {
+  flex: 1;
+}
+
+.maxButton {
+  padding: 0 0.875rem;
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-stoa-gold);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.maxButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+}
+
+/* Primary action — filled gold. */
+.primary {
+  padding: 0.6875rem 1rem;
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 0.5rem;
+  background: var(--color-stoa-gold);
+  color: #0a0a0a;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Secondary action — gold outline. */
+.secondary {
+  padding: 0.5rem 0.875rem;
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-stoa-gold);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+/* In-flight stage — info tinted. */
+.stageRow {
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid rgb(59 130 246 / 0.4);
+  border-radius: 0.5rem;
+  background: rgb(59 130 246 / 0.1);
+  color: var(--color-status-info);
+  font-size: 0.8125rem;
+}
+
+/* Done — green tinted. */
+.doneRow {
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid rgb(74 222 128 / 0.4);
+  border-radius: 0.5rem;
+  background: rgb(74 222 128 / 0.1);
+  color: var(--color-status-success);
+  font-size: 0.8125rem;
+}
+
+/* Hard error — red tinted (distinct from PENDING). */
+.errorRow {
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid rgb(239 68 68 / 0.4);
+  border-radius: 0.5rem;
+  background: rgb(239 68 68 / 0.1);
+  color: var(--color-status-danger);
+  font-size: 0.8125rem;
+}
+
+/* Pending — gold tinted (distinct from done-green and error-red). */
+.pendingRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.625rem;
+  border: 1px solid rgb(212 175 55 / 0.4);
+  border-radius: 0.5rem;
+  background: rgb(212 175 55 / 0.1);
+}
+
+.pendingText {
+  margin: 0;
+  color: var(--color-stoa-gold);
+  font-size: 0.8125rem;
+}
+
+.requestKey {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-stoa-slate);
+  word-break: break-all;
+}
+
+.pendingActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.875rem;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.75rem;
+  background: var(--color-stoa-surface);
+}
+
+.resultLine {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.resultLabel {
+  flex: 1;
+  color: var(--color-stoa-slate);
+}
+
+.resultValue {
+  font-weight: 700;
+  color: var(--color-stoa-light);
+}
+
+.resultDenominator {
+  color: var(--color-stoa-slate);
+  font-weight: 600;
+}
+
+.resultAmount {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--color-stoa-gold);
+}
+
+.lockedText {
+  margin: 0;
+  color: var(--color-stoa-slate);
+}

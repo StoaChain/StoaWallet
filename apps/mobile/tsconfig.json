@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "checkJs": false
+  },
+  "references": [{ "path": "../../packages/core" }, { "path": "../../packages/ui" }],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "webDir.ts",
+    "capacitor.config.ts",
+    "vite.config.ts",
+    "scripts/**/*.mjs"
+  ]
+}

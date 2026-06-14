@@ -1,0 +1,32 @@
+{
+  "name": "@stoawallet/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/index.ts",
+    "./send-live": "./src/send/sendSameChain.live.ts",
+    "./crosschain-live": "./src/crosschain/sendCrossChainStep0.live.ts",
+    "./build/polyfills": "./src/build/polyfills.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@stoachain/kadena-stoic-legacy": "file:../../../StoaOuronet/stoa-js/packages/kadena-stoic-legacy",
+    "@stoachain/stoa-core": "file:../../../StoaOuronet/stoa-js/packages/stoa-core",
+    "@stoachain/ouronet-core": "file:../../../StoaOuronet/stoa-js/packages/ouronet-core",
+    "@stoachain/ouronet-codex": "file:../../../StoaOuronet/stoa-js/packages/ouronet-codex",
+    "@noble/curves": "1.9.7",
+    "@scure/bip39": "1.2.1",
+    "ed25519-keygen": "0.4.8",
+    "tweetnacl": "^1.0.3",
+    "blakejs": "^1.2.1",
+    "buffer": "6.0.3",
+    "@kadena/chainweb-node-client": "0.9.5",
+    "@kadena/pactjs": "0.6.0"
+  }
+}

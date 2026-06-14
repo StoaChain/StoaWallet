@@ -1,0 +1,132 @@
+.flow {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 24px;
+  background: var(--color-stoa-dark);
+  color: var(--color-stoa-light);
+  font-family: var(--font-sans);
+}
+
+.heading {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-stoa-light);
+}
+
+.subheading {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-stoa-slate);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cell {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 8px;
+  background: var(--color-stoa-surface);
+}
+
+.cellIndex {
+  min-width: 18px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-stoa-gold);
+}
+
+.cellWord {
+  font-size: 14px;
+  color: var(--color-stoa-light);
+}
+
+.confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--color-stoa-slate);
+  cursor: pointer;
+}
+
+.confirm input {
+  margin-top: 2px;
+  accent-color: var(--color-stoa-gold);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  color: var(--color-stoa-slate);
+}
+
+.input {
+  padding: 10px 12px;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 8px;
+  background: var(--color-stoa-surface);
+  color: var(--color-stoa-light);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-stoa-gold);
+}
+
+.error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-status-danger);
+}
+
+.primary {
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-stoa-gold);
+  color: var(--color-stoa-dark);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary:disabled {
+  background: var(--color-status-disabled);
+  cursor: not-allowed;
+}
+
+.secondary {
+  padding: 10px 16px;
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-stoa-gold);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}

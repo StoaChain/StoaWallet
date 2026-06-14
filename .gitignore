@@ -1,0 +1,31 @@
+node_modules/
+dist/
+.bee/
+.claude/
+.env
+.env.*
+*.log
+.DS_Store
+
+# Phase build artifacts
+packages/core/gasless-result.json
+
+# Mobile Capacitor WebView build output (Capacitor `webDir`)
+apps/mobile/dist-web/
+
+# Generated native projects — created by `npx cap add android/ios`, never hand-
+# edited (the injectPermissions script patches them re-runnably instead).
+apps/mobile/android/
+apps/mobile/ios/
+
+# Native signing material — NEVER commit. Keystores, certs, provisioning.
+# A single leaked keystore or provisioning profile is an irreversible credential
+# compromise: it lets anyone publish an "official" update over the install base.
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+keystore.properties
+apps/mobile/android/keystore.properties
+# iOS export config can embed the signing team/cert identity — gitignore it too.
+exportOptions.plist

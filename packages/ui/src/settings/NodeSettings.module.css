@@ -1,0 +1,156 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.75rem;
+  background: var(--color-stoa-surface);
+  color: var(--color-stoa-light);
+  font-family: var(--font-sans);
+}
+
+.heading {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-stoa-gold);
+}
+
+/* One-time corrupt-reset notice — informational, dismissable. */
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-status-info);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-stoa-light);
+  font-size: 0.8125rem;
+}
+
+.dismiss {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--color-stoa-slate);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.activeNode {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-stoa-slate);
+}
+
+.activeNodeValue {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--color-stoa-light);
+  word-break: break-all;
+}
+
+.fallbackTag {
+  color: var(--color-status-disabled);
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.legend {
+  padding: 0;
+  font-size: 0.8125rem;
+  color: var(--color-stoa-slate);
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.customBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.urlLabel {
+  font-size: 0.8125rem;
+  color: var(--color-stoa-slate);
+}
+
+.urlInput {
+  appearance: none;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  background: var(--color-stoa-dark);
+  color: var(--color-stoa-light);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+}
+
+.urlInput:focus {
+  outline: none;
+  border-color: var(--color-stoa-gold);
+}
+
+/* Trust warning — danger-accented panel, shown only for a custom node. */
+.trustWarning {
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--color-status-danger);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-stoa-light);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Primary = gold outline, mirrors the Balances refresh treatment. */
+.apply,
+.revert {
+  appearance: none;
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 0.5rem;
+  padding: 0.4375rem 0.875rem;
+  background: transparent;
+  color: var(--color-stoa-gold);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.apply:hover:not(:disabled),
+.revert:hover:not(:disabled) {
+  background: var(--color-stoa-dark);
+}
+
+.apply:disabled {
+  border-color: var(--color-stoa-border);
+  color: var(--color-stoa-slate);
+  cursor: default;
+}
+
+.feedback {
+  margin: 0;
+  color: var(--color-status-danger);
+  font-size: 0.8125rem;
+}

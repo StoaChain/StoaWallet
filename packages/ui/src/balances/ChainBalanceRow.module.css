@@ -1,0 +1,52 @@
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.5rem;
+  background: var(--color-stoa-surface);
+  color: var(--color-stoa-light);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+}
+
+.label {
+  color: var(--color-stoa-slate);
+  font-size: 0.8125rem;
+}
+
+.value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--color-stoa-gold);
+}
+
+/* A funded chain glows gold; a zero account is dimmed so an empty-but-present
+   account reads differently from a balance with coins in it. */
+.zero {
+  color: var(--color-stoa-slate);
+}
+
+/* Absent: a present-but-empty account and a missing account must never look
+   alike, so absent uses muted slate and a dash, never a "0" amount. */
+.absent {
+  color: var(--color-stoa-slate);
+  font-style: italic;
+  font-size: 0.8125rem;
+}
+
+.error {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--color-status-danger);
+  font-size: 0.8125rem;
+}
+
+.errorIcon {
+  flex-shrink: 0;
+}

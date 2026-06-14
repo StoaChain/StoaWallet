@@ -1,0 +1,19 @@
+/* StoaWallet theme — CSS custom properties mirroring tokens.ts / DESIGN.md. Dark-only. */
+:root {
+  --color-stoa-dark: #0a0a0a; /* app background (base) */
+  --color-stoa-surface: #1a1a1a; /* cards / panels */
+  --color-stoa-border: #2d2d2d; /* borders / dividers */
+  --color-stoa-light: #f5f5f5; /* primary text */
+  --color-stoa-slate: #9aa6b2; /* secondary / muted text */
+  --color-stoa-gold: #d4af37; /* PRIMARY accent · brand · STOA */
+  --color-stoa-silver: #c7cdd4; /* UrStoa accent (cool light) */
+  --color-stoa-accent: #3b82f6; /* info / links (blue) */
+
+  --color-status-success: #4ade80;
+  --color-status-info: #3b82f6;
+  --color-status-active: #d4af37;
+  --color-status-disabled: #9aa6b2;
+  --color-status-danger: #ef4444;
+
+  --font-sans: Inter, sans-serif;
+}

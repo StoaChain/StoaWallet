@@ -1,0 +1,32 @@
+{
+  "name": "@stoawallet/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aparajita/capacitor-biometric-auth": "10.0.0",
+    "@capacitor-mlkit/barcode-scanning": "8.1.0",
+    "@capacitor/app": "8.1.0",
+    "@capacitor/core": "8.4.0",
+    "@stoachain/kadena-stoic-legacy": "file:../../../StoaOuronet/stoa-js/packages/kadena-stoic-legacy",
+    "@stoawallet/core": "workspace:*",
+    "@stoawallet/ui": "workspace:*",
+    "capacitor-secure-storage-plugin": "0.13.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "8.4.0",
+    "@capacitor/cli": "8.4.0",
+    "@capacitor/ios": "8.4.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "build:web": "vite build",
+    "sync": "cap sync",
+    "cap:sync": "cap sync",
+    "build:android": "cd android && gradlew assembleDebug && gradlew bundleRelease",
+    "build:ios": "xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Release -archivePath build/App.xcarchive archive && xcodebuild -exportArchive -archivePath build/App.xcarchive -exportOptionsPlist exportOptions.plist -exportPath build/ipa",
+    "permissions:inject": "node scripts/injectPermissions.mjs"
+  }
+}

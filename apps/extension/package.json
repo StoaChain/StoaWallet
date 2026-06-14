@@ -1,0 +1,23 @@
+{
+  "name": "@stoawallet/extension",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@stoachain/kadena-stoic-legacy": "file:../../../StoaOuronet/stoa-js/packages/kadena-stoic-legacy",
+    "@stoachain/stoa-core": "file:../../../StoaOuronet/stoa-js/packages/stoa-core",
+    "@stoawallet/core": "workspace:*",
+    "@stoawallet/ui": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "2.6.1",
+    "@types/chrome": "^0.0.287"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "build:ext": "vite build",
+    "icons": "node scripts/genIcons.mjs"
+  }
+}

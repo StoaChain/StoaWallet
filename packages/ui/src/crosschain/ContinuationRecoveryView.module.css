@@ -1,0 +1,213 @@
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--color-stoa-dark);
+  color: var(--color-stoa-light);
+  font-family: var(--font-sans);
+}
+
+.heading {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-stoa-light);
+}
+
+.subheading {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-stoa-slate);
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.labelText {
+  font-size: 0.8125rem;
+  color: var(--color-stoa-slate);
+}
+
+.input {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.5rem;
+  background: var(--color-stoa-surface);
+  color: var(--color-stoa-light);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9375rem;
+  box-sizing: border-box;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-stoa-gold);
+}
+
+.requestRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.requestRow .input {
+  flex: 1;
+}
+
+.chainRow {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.chainRow .label {
+  flex: 1;
+}
+
+/* Secondary action — gold outline. */
+.paste,
+.secondary {
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-stoa-gold);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.paste:hover,
+.secondary:hover {
+  background: var(--color-stoa-surface);
+}
+
+/* Primary action — filled gold. */
+.primary {
+  padding: 0.6875rem 1rem;
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 0.5rem;
+  background: var(--color-stoa-gold);
+  color: #0a0a0a;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.requestKey {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-stoa-slate);
+  word-break: break-all;
+}
+
+/* Status surfaces — semantic chips: <semantic>/10 bg + /40 border per DESIGN.md. */
+.stage {
+  padding: 0.625rem 0.75rem;
+  border: 1px solid rgb(59 130 246 / 0.4);
+  border-radius: 0.5rem;
+  background: rgb(59 130 246 / 0.1);
+  color: var(--color-status-info);
+  font-size: 0.875rem;
+}
+
+.info {
+  padding: 0.875rem;
+  border: 1px solid rgb(59 130 246 / 0.4);
+  border-radius: 0.5rem;
+  background: rgb(59 130 246 / 0.1);
+}
+
+.infoText {
+  margin: 0;
+  color: var(--color-status-info);
+}
+
+.pending {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem;
+  border: 1px solid rgb(212 175 55 / 0.4);
+  border-radius: 0.5rem;
+  background: rgb(212 175 55 / 0.1);
+}
+
+.pendingText {
+  margin: 0;
+  color: var(--color-stoa-gold);
+}
+
+.success {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem;
+  border: 1px solid rgb(74 222 128 / 0.4);
+  border-radius: 0.5rem;
+  background: rgb(74 222 128 / 0.1);
+}
+
+.successText {
+  margin: 0;
+  color: var(--color-status-success);
+  font-weight: 600;
+}
+
+.successDetail {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-stoa-slate);
+}
+
+.successActions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.explorerLink {
+  color: var(--color-stoa-accent);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.explorerLink:hover {
+  text-decoration: underline;
+}
+
+.error {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem;
+  border: 1px solid rgb(239 68 68 / 0.4);
+  border-radius: 0.5rem;
+  background: rgb(239 68 68 / 0.1);
+}
+
+.errorText {
+  margin: 0;
+  color: var(--color-status-danger);
+}

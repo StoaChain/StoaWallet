@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      FRAMING / CLICKJACKING enforcement (the Phase-7 SECURITY.md forward contract).
+
+      This is the dApp signature-approval surface — the highest-risk web-facing
+      document in the wallet. A successful clickjack here maps directly to
+      unauthorized signing, so the framing posture is machine-asserted:
+
+        - frame-ancestors 'none' — the modern X-Frame-Options equivalent. No page
+          can iframe this prompt to stage a transparent-overlay clickjack.
+        - script-src 'self' — wallet-class: no inline/eval/remote script, matching
+          the manifest extension-page CSP (NOT loosened here).
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; object-src 'self'; frame-ancestors 'none'; base-uri 'none'"
+    />
+    <!--
+      Sensor lockdown: a signing prompt has no reason to reach the camera, mic,
+      geolocation, USB/HID/serial, motion sensors, or the Payment Request API.
+      Denying them removes a whole class of side-channel / physical-device attacks
+      even if the page is somehow embedded or compromised.
+    -->
+    <meta
+      http-equiv="Permissions-Policy"
+      content="camera=(), microphone=(), geolocation=(), usb=(), hid=(), serial=(), accelerometer=(), gyroscope=(), magnetometer=(), payment=()"
+    />
+    <title>StoaWallet — Approve</title>
+  </head>
+  <body>
+    <div id="approval-root"></div>
+    <script type="module" src="/src/approval/index.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,171 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.75rem;
+  background: var(--color-stoa-surface);
+  color: var(--color-stoa-light);
+  font-family: var(--font-sans);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-stoa-light);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.5rem;
+  background: var(--color-stoa-dark);
+  font-size: 0.875rem;
+}
+
+.label {
+  color: var(--color-stoa-slate);
+  font-size: 0.8125rem;
+}
+
+.value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--color-stoa-silver);
+}
+
+/* A null figure is the distinct unknown dash — muted slate, never a "0". */
+.unknownValue {
+  color: var(--color-stoa-slate);
+  font-style: italic;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Primary money-moving affordances: gold outline (transparent, gold border +
+   text) — the same secondary treatment the balances/unlock screens use. */
+.action,
+.refresh {
+  appearance: none;
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 0.5rem;
+  padding: 0.4375rem 0.875rem;
+  background: transparent;
+  color: var(--color-stoa-gold);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.action:hover:not(:disabled),
+.refresh:hover:not(:disabled) {
+  background: var(--color-stoa-surface);
+}
+
+.refresh:disabled {
+  border-color: var(--color-stoa-border);
+  color: var(--color-stoa-slate);
+  cursor: default;
+}
+
+.refreshing {
+  font-size: 0.8125rem;
+  color: var(--color-stoa-slate);
+}
+
+.idle {
+  padding: 1.5rem 1rem;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.75rem;
+  background: var(--color-stoa-dark);
+  color: var(--color-stoa-slate);
+  text-align: center;
+}
+
+.errorText {
+  color: var(--color-status-danger);
+}
+
+/* Unknown is NOT zero: a failed-figures read gets a distinct danger-toned
+   affordance, never a plain "0" reading as an empty balance. */
+.unknownText {
+  color: var(--color-status-danger);
+}
+
+.retry {
+  appearance: none;
+  align-self: flex-start;
+  border: 1px solid var(--color-status-danger);
+  border-radius: 0.5rem;
+  padding: 0.4375rem 0.875rem;
+  background: transparent;
+  color: var(--color-status-danger);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.retry:hover {
+  background: var(--color-stoa-surface);
+}
+
+/* Loading skeleton — a shimmering placeholder, never a blank or a fake "0". */
+.rowsSkeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.rowSkeleton {
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  background: var(--color-stoa-dark);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* Visually hidden but announced to assistive tech. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

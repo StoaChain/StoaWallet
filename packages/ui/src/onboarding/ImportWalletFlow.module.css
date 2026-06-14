@@ -1,0 +1,179 @@
+/* Import-wallet flow — dark gold-on-near-black, CSS Modules over theme.css vars. */
+
+.flow {
+  font-family: var(--font-sans);
+  color: var(--color-stoa-light);
+  max-width: 32rem;
+  margin: 0 auto;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  background: var(--color-stoa-surface);
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.75rem;
+}
+
+.heading {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-stoa-light);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-stoa-slate);
+}
+
+.label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-stoa-slate);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-height: 6rem;
+  padding: 0.75rem;
+  background: var(--color-stoa-dark);
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.5rem;
+}
+
+.placeholder {
+  margin: auto;
+  font-size: 0.875rem;
+  font-style: italic;
+  color: var(--color-stoa-slate);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: fit-content;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8125rem;
+  color: var(--color-stoa-light);
+  background: var(--color-stoa-surface);
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 9999px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--color-stoa-gold);
+}
+
+.chipIndex {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-stoa-slate);
+  background: var(--color-stoa-dark);
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 9999px;
+}
+
+.chipWord {
+  color: var(--color-stoa-light);
+}
+
+.chipRemove {
+  color: var(--color-stoa-slate);
+}
+
+.textarea,
+.input {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  color: var(--color-stoa-light);
+  background: var(--color-stoa-dark);
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.5rem;
+  resize: vertical;
+}
+
+.textarea::placeholder {
+  color: var(--color-stoa-slate);
+}
+
+.textarea:focus,
+.input:focus {
+  outline: none;
+  border-color: var(--color-stoa-gold);
+}
+
+.counter {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-stoa-slate);
+}
+
+.error {
+  margin: 0;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-status-danger);
+  background: var(--color-stoa-dark);
+  border: 1px solid var(--color-status-danger);
+  border-radius: 0.5rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.primary {
+  flex: 1;
+  padding: 0.7rem 1rem;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-stoa-dark);
+  background: var(--color-stoa-gold);
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.primary:disabled {
+  color: var(--color-stoa-slate);
+  background: transparent;
+  border-color: var(--color-stoa-border);
+  cursor: not-allowed;
+}
+
+.secondary {
+  padding: 0.7rem 1rem;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-stoa-gold);
+  background: transparent;
+  border: 1px solid var(--color-stoa-gold);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.secondary:disabled {
+  color: var(--color-stoa-slate);
+  border-color: var(--color-stoa-border);
+  cursor: not-allowed;
+}
