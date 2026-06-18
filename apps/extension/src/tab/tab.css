@@ -1,0 +1,31 @@
+/*
+ * Full-tab DIMENSIONS for the extension's expand surface. Unlike the action
+ * popup (a fixed 380px sliver, see popup.css), this is a real top-level browser
+ * tab, so the page is full-viewport and the shared `.shell` (which already caps
+ * itself at max-width:420px and `margin:0 auto`) centers as a column.
+ *
+ * Bundled + emitted as a <link> by Vite (loaded from 'self'), so it satisfies the
+ * wallet-class `script-src 'self'` CSP without any inline <style>. Lives in the
+ * EXTENSION (not the shared theme.css) because mobile is its own full-viewport
+ * surface and the popup is the narrow column.
+ */
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--color-stoa-dark, #0a0a0a);
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  /* A touch more breathing room than the popup; the shell keeps its own 420px
+     cap, so this only widens the centered gutter, it does not fight the shell. */
+  padding: 24px 16px;
+  box-sizing: border-box;
+}

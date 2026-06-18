@@ -16,6 +16,13 @@ import manifest from './manifest.config';
 // Permissions-Policy) live in the HTML's own <meta> CSP.
 const approvalPage = fileURLToPath(new URL('./src/approval/approval.html', import.meta.url));
 
+// The full-tab "expand" surface — an extension page opened by the popup via
+// `chrome.tabs.create(chrome.runtime.getURL('src/tab/index.html'))`. Like the
+// approval page it is NOT referenced from the manifest, so @crxjs only bundles it
+// when it is declared as an explicit Rollup HTML input here. Its wallet-class CSP
+// (no frame-ancestors — it is a top-level tab) lives in the HTML's own <meta>.
+const tabPage = fileURLToPath(new URL('./src/tab/index.html', import.meta.url));
+
 // Chrome MV3 extension build. Two layers compose here:
 //
 //  1. @crxjs `crx({ manifest })` reads manifest.config.ts and registers BOTH
@@ -35,7 +42,7 @@ export default defineConfig({
   resolve: stoachainResolve(),
   build: {
     rollupOptions: {
-      input: { approval: approvalPage },
+      input: { approval: approvalPage, tab: tabPage },
     },
   },
   // The icons are referenced from the manifest as `public/icons/*.png`, so

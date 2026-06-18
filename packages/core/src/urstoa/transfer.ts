@@ -18,8 +18,8 @@
  * SECRET HANDLING (highest priority): outcomes are a DISCRIMINATED result, never
  * a thrown secret-bearing Error. The `paymentKeypair` / its secret material and
  * the recipient pubkey are NEVER logged. The `amount` is the pre-formatted
- * 24-decimal injection-safe string from the caller and is passed through
- * unchanged (no reformat).
+ * injection-safe string from the caller (UrStoa's 3-decimal scale) and is passed
+ * through unchanged (no reformat).
  *
  * RR#1 (Transfer signer model, PAT-004): the active account's `paymentKeypair`
  * signs both caps; there is NO separate gas-station signer in the pact sense, so

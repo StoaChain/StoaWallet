@@ -1,7 +1,8 @@
 import { STOA_CHAINS } from '@stoawallet/core';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { TokenGlyph } from '../theme/TokenGlyph';
+import { useToast, type ToastStep } from '../toast/ToastContext';
 import styles from './MinerAggregationView.module.css';
 import {
   useMinerAggregation,
@@ -28,6 +29,37 @@ const PENDING = new Set<ChainEntry['progress']>([
 /** A pre-burn transient keyset-read failure: nothing landed, safe to re-aggregate. */
 const GUARD_UNAVAILABLE: ChainEntry['progress'] = 'guard-unavailable';
 
+/** Map one source's per-chain sweep stage to a multi-step toast sub-row. */
+function stepForSource(entry: ChainEntry): ToastStep {
+  const label = `Chain ${entry.chainId}`;
+  switch (entry.progress) {
+    case 'done':
+      return { label, status: 'success', note: 'done' };
+    case 'error':
+      return { label, status: 'error', note: 'failed' };
+    case 'network-lost':
+    case 'spv-timeout':
+    case 'continuation-pending':
+      return { label, status: 'info', note: 'pending' };
+    case 'guard-unavailable':
+      return { label, status: 'info', note: 'retry' };
+    case 'submitting':
+      return { label, status: 'pending', note: 'burning' };
+    case 'confirming':
+      return { label, status: 'pending', note: 'confirming' };
+    case 'waiting-spv':
+      return {
+        label,
+        status: 'pending',
+        note: `SPV ${entry.spvAttempt ?? 0}/${entry.spvMaxAttempts ?? 0}`,
+      };
+    case 'completing':
+      return { label, status: 'pending', note: 'completing' };
+    default:
+      return { label, status: 'pending' };
+  }
+}
+
 export interface MinerAggregationViewProps {
   /**
    * Forwarded verbatim to `useMinerAggregation` — the pre-scan, the up-front
@@ -47,19 +79,34 @@ export interface MinerAggregationViewProps {
   readonly onRequireUnlock?: () => void;
 }
 
+const PICO = 10n ** 12n;
+
+/** A 12-decimal STOA amount string as integer pico-units (0 for a malformed value). */
+function toPico(raw: string): bigint {
+  const t = raw.trim();
+  if (!/^\d+(\.\d+)?$/.test(t)) return -1n; // sentinel for "not a valid decimal"
+  const [whole, frac = ''] = t.split('.');
+  const fracPadded = (frac + '000000000000').slice(0, 12);
+  return BigInt(whole || '0') * PICO + BigInt(fracPadded || '0');
+}
+
 /** Sum 12-decimal STOA amount strings as integer pico-units, then re-format. */
 function sumAmounts(amounts: readonly string[]): string {
-  const scale = 12n;
-  const factor = 10n ** scale;
   let total = 0n;
   for (const raw of amounts) {
-    const [whole, frac = ''] = raw.split('.');
-    const fracPadded = (frac + '000000000000').slice(0, 12);
-    total += BigInt(whole || '0') * factor + BigInt(fracPadded || '0');
+    const p = toPico(raw);
+    if (p > 0n) total += p;
   }
-  const whole = total / factor;
-  const frac = (total % factor).toString().padStart(12, '0');
+  const whole = total / PICO;
+  const frac = (total % PICO).toString().padStart(12, '0');
   return `${whole.toString()}.${frac}`;
+}
+
+/** Whether `amount` is invalid OR exceeds `max` (the source can't sweep more than it holds). */
+function exceedsMax(amount: string, max: string): boolean {
+  const a = toPico(amount);
+  if (a < 0n) return true; // malformed → treat as invalid (gates the sweep)
+  return a > toPico(max);
 }
 
 /**
@@ -108,6 +155,64 @@ export function MinerAggregationView({
     locked,
   } = useMinerAggregation(hookOptions);
 
+  const [detailed, setDetailed] = useState(false);
+
+  // ── Multi-step aggregate toast ──
+  // A single floating toast summarizes the whole sweep: one sub-row per swept
+  // chain (burn → confirm → SPV → continuation), the parent toast pending until
+  // every chain settles, then a terminal breakdown that auto-dismisses. The
+  // detailed inline per-chain cards remain the source of truth; this is the
+  // consistent at-a-glance feedback every other flow gets via the tx toast.
+  const toast = useToast();
+  const toastIdRef = useRef<string | null>(null);
+  const wasExecutingRef = useRef(false);
+  // A change-signature over the per-chain stages so the effect re-syncs the toast
+  // steps exactly when a chain's stage advances (not on every unrelated render).
+  const stepsSig = sources
+    .map((s) => `${s.chainId}:${s.progress}:${s.spvAttempt ?? ''}`)
+    .join('|');
+  const steps = useMemo<readonly ToastStep[]>(
+    () => sources.map(stepForSource),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [stepsSig],
+  );
+
+  useEffect(() => {
+    // Sweep just started → open the pending multi-step toast.
+    if (isExecuting && toastIdRef.current === null) {
+      wasExecutingRef.current = true;
+      toastIdRef.current = toast.show({
+        status: 'pending',
+        title: `Aggregating into Chain ${targetChain}`,
+        detail: 'Sweeping miner rewards…',
+        steps,
+      });
+      return;
+    }
+    // In-flight → keep the sub-rows in sync as each chain advances.
+    if (isExecuting && toastIdRef.current !== null) {
+      toast.update(toastIdRef.current, { steps });
+      return;
+    }
+    // Settled (executing went false with a toast open) → terminal breakdown.
+    if (!isExecuting && toastIdRef.current !== null && wasExecutingRef.current) {
+      wasExecutingRef.current = false;
+      const id = toastIdRef.current;
+      toastIdRef.current = null;
+      const done = steps.filter((s) => s.status === 'success').length;
+      const failed = steps.filter((s) => s.status === 'error').length;
+      const pending = steps.filter((s) => s.status === 'info').length;
+      const allDone = done === steps.length && steps.length > 0;
+      toast.update(id, {
+        status: allDone ? 'success' : failed > 0 && done === 0 ? 'error' : 'info',
+        title: allDone ? 'Aggregation complete' : 'Aggregation finished',
+        detail: `${done} aggregated · ${pending} pending · ${failed} failed`,
+        steps,
+        autoDismissMs: 9000,
+      });
+    }
+  }, [isExecuting, steps, targetChain, toast]);
+
   if (locked) {
     return (
       <section className={styles.view} data-testid="miner-locked">
@@ -127,14 +232,21 @@ export function MinerAggregationView({
   }
 
   const hasFundedSources = sources.length > 0;
-  const settled = sources.some((s) => s.progress !== 'idle');
+  // Any source past idle means a sweep is in progress / has settled — show the
+  // per-chain cards then (so live progress is visible) even in the simple view.
+  const anyProgress = sources.some((s) => s.progress !== 'idle');
+  const settled = anyProgress;
+  // The simple summary: total sweepable across all funded sources + their count.
+  const total = sumAmounts(sources.map((s) => s.amount));
+  // Custom amounts must never exceed their source balance; that gates the sweep.
+  const anyExceeds = sources.some((s) => exceedsMax(s.amount, s.max));
+
+  // Show the per-chain cards when the user opens details OR a sweep is live.
+  const showSources = detailed || anyProgress;
 
   return (
     <section className={styles.view} data-testid="miner-view">
       <h1 className={styles.heading}>Aggregate Miner Rewards</h1>
-      <p className={styles.subheading}>
-        Sweep your mined Stoa Coin from every funded chain into one target chain.
-      </p>
 
       <label className={styles.label}>
         <span className={styles.labelText}>Target chain</span>
@@ -153,13 +265,44 @@ export function MinerAggregationView({
         </select>
       </label>
 
+      {hasFundedSources ? (
+        <p className={styles.summary} data-testid="miner-summary">
+          Aggregate{' '}
+          <span className={styles.summaryAmount}>
+            {total} <TokenGlyph token="STOA" className={styles.amountGlyph} />
+          </span>{' '}
+          from{' '}
+          <span data-testid="miner-source-count">{sources.length}</span> chain
+          {sources.length === 1 ? '' : 's'} into Chain {targetChain}. Empty chains
+          are skipped.
+        </p>
+      ) : (
+        <p className={styles.empty} data-testid="miner-empty">
+          No funded chains to sweep — every chain is empty or holds the target.
+        </p>
+      )}
+
       <p className={styles.gasless} data-testid="miner-gasless">
         This sweep is gasless — chain-0 sources are sponsored by the Ouronet Gas
         Station (DALOS.GAS_PAYER) and chains 1-9 by kadena-xchain-gas. You pay no
         gas on either path.
       </p>
 
-      {hasFundedSources ? (
+      {hasFundedSources && !anyProgress && (
+        <button
+          type="button"
+          data-testid="miner-toggle-details"
+          className={styles.detailsToggle}
+          onClick={() => setDetailed((v) => !v)}
+          aria-expanded={detailed}
+        >
+          {detailed
+            ? 'Hide details'
+            : 'Customize per-chain amounts (advanced)'}
+        </button>
+      )}
+
+      {showSources && hasFundedSources && (
         <ul className={styles.sourceList}>
           {sources.map((entry) => (
             <SourceCard
@@ -172,10 +315,6 @@ export function MinerAggregationView({
             />
           ))}
         </ul>
-      ) : (
-        <p className={styles.empty} data-testid="miner-empty">
-          No funded chains to sweep — every chain is empty or holds the target.
-        </p>
       )}
 
       <button
@@ -183,7 +322,7 @@ export function MinerAggregationView({
         data-testid="miner-aggregate"
         className={styles.primary}
         onClick={() => void aggregate()}
-        disabled={isExecuting || !hasFundedSources}
+        disabled={isExecuting || !hasFundedSources || anyExceeds}
       >
         {isExecuting ? 'Aggregating…' : 'Aggregate STOA'}
       </button>
@@ -207,24 +346,25 @@ function SourceCard({
   onRouteToRecovery?: (route: MinerRecoveryRoute) => void;
   onRetry?: () => void;
 }): ReactNode {
-  const { chainId, amount, progress } = entry;
+  const { chainId, amount, max, progress } = entry;
   // A recover-via-Continue PENDING locks the amount input (the burn may have
   // committed); guard-unavailable does NOT lock it (nothing landed — safe to retry).
   const isPending = PENDING.has(progress);
+  const over = exceedsMax(amount, max);
 
   return (
     <li className={styles.card} data-testid={`miner-source-${chainId}`}>
       <div className={styles.cardHead}>
         <span className={styles.chainTag}>Chain {chainId}</span>
-        <span className={styles.balance}>
-          {amount} <TokenGlyph token="STOA" className={styles.amountGlyph} />
+        <span className={styles.balance} data-testid={`miner-balance-${chainId}`}>
+          max {max} <TokenGlyph token="STOA" className={styles.amountGlyph} />
         </span>
       </div>
 
       <div className={styles.amountRow}>
         <input
           data-testid={`miner-amount-${chainId}`}
-          className={styles.input}
+          className={`${styles.input} ${over ? styles.inputError : ''}`}
           type="text"
           inputMode="decimal"
           autoComplete="off"
@@ -233,17 +373,28 @@ function SourceCard({
           value={amount}
           onChange={(e) => onAmount(e.target.value)}
           disabled={disabled || isPending}
+          aria-invalid={over}
         />
         <button
           type="button"
           data-testid={`miner-max-${chainId}`}
           className={styles.maxButton}
-          onClick={() => onAmount(entry.amount)}
+          onClick={() => onAmount(max)}
           disabled={disabled || isPending}
         >
           MAX
         </button>
       </div>
+
+      {over && (
+        <p
+          className={styles.exceedWarn}
+          role="alert"
+          data-testid={`miner-exceed-${chainId}`}
+        >
+          Can&apos;t exceed this chain&apos;s balance ({max}).
+        </p>
+      )}
 
       <SourceProgress
         entry={entry}

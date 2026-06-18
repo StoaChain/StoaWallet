@@ -29,8 +29,16 @@
  */
 export type EncryptedBlob = string & { readonly __encrypted: unique symbol };
 
-/** A 24-word koala (BIP39) seed is the only seed type the wallet onboards. */
-export type SeedType = 'koala';
+/**
+ * The seed derivation schemes the vault can hold. A fresh ONBOARD always creates
+ * a 24-word `koala` (BIP39) seed; `chainweaver` and `eckowallet` (both 12-word
+ * Kadena BIP32-Ed25519) arrive ONLY via a Codex import, which brings seeds of any
+ * of these types. The signer routes by this field at sign time.
+ */
+export type SeedType = 'koala' | 'chainweaver' | 'eckowallet';
+
+/** The full set of valid seed types — the single source for runtime validation. */
+export const SEED_TYPES: readonly SeedType[] = ['koala', 'chainweaver', 'eckowallet'];
 
 /**
  * A raw keypair pasted/imported directly into the vault, NOT derived from a
@@ -195,7 +203,7 @@ function isStoredWallet(value: unknown): value is StoredWallet {
     Array.isArray(w.accounts) &&
     w.accounts.every(isStoredAccount) &&
     typeof w.activeAccountIndex === 'number' &&
-    w.seedType === 'koala' &&
+    SEED_TYPES.includes(w.seedType as SeedType) &&
     typeof w.createdAt === 'string'
   );
 }

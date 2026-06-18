@@ -178,6 +178,103 @@ describe('background service worker', () => {
     expect(chromeDouble.idle.listenerCount()).toBe(1);
   });
 
+  describe('timestamp auto-lock + getSession tick', () => {
+    /** Boot a background over a CONTROLLABLE clock so the timestamp lock is testable. */
+    function bootWithClock(now: () => number): {
+      bg: Background;
+      keyVault: InMemoryKeyVault;
+    } {
+      const { manager, keyVault } = makeManager();
+      const bg = createBackground({
+        manager,
+        keyVault,
+        runtimeId: RUNTIME_ID,
+        configureNode: configureNodeSpy,
+        idleSeconds: 60, // → a 1-minute window
+        now,
+      });
+      return { bg, keyVault };
+    }
+
+    it('arms a live expiry on unlock and reports it via getSession (no re-arm on poll)', async () => {
+      let clock = 1_000_000;
+      const { bg } = bootWithClock(() => clock);
+      await bg.start();
+      const wallet = await seedWallet();
+      await dispatch(bg, {
+        type: 'unlock',
+        walletId: wallet.walletId,
+        password: PASSWORD,
+      });
+
+      const s1 = (await dispatch(bg, { type: 'getSession' })) as {
+        ok: true;
+        unlocked: boolean;
+        expiresAt: number | null;
+      };
+      expect(s1).toMatchObject({ ok: true, unlocked: true });
+      expect(s1.expiresAt).toBe(1_000_000 + 60_000);
+
+      // Polling getSession does NOT re-arm — the expiry is unchanged as time passes.
+      clock = 1_030_000;
+      const s2 = (await dispatch(bg, { type: 'getSession' })) as {
+        expiresAt: number | null;
+      };
+      expect(s2.expiresAt).toBe(1_060_000);
+    });
+
+    it('LOCKS once the window elapses (getSession poke enforces the timestamp)', async () => {
+      let clock = 1_000_000;
+      const { bg, keyVault } = bootWithClock(() => clock);
+      await bg.start();
+      const wallet = await seedWallet();
+      await dispatch(bg, {
+        type: 'unlock',
+        walletId: wallet.walletId,
+        password: PASSWORD,
+      });
+      expect(keyVault.isUnlocked()).toBe(true);
+
+      // Step past the 60s window; the next tick locks.
+      clock = 1_061_000;
+      const s = (await dispatch(bg, { type: 'getSession' })) as {
+        unlocked: boolean;
+        expiresAt: number | null;
+      };
+      expect(s).toMatchObject({ unlocked: false, expiresAt: null });
+      expect(keyVault.isUnlocked()).toBe(false);
+    });
+
+    it('setAutoLock changes the live window (clamped) and re-arms it', async () => {
+      let clock = 1_000_000;
+      const { bg } = bootWithClock(() => clock);
+      await bg.start();
+      const wallet = await seedWallet();
+      await dispatch(bg, {
+        type: 'unlock',
+        walletId: wallet.walletId,
+        password: PASSWORD,
+      });
+
+      const set = await dispatch(bg, { type: 'setAutoLock', minutes: 15 });
+      expect(set).toEqual({ ok: true, autoLockMinutes: 15 });
+
+      const s = (await dispatch(bg, { type: 'getSession' })) as {
+        expiresAt: number | null;
+        autoLockMinutes: number;
+      };
+      expect(s.autoLockMinutes).toBe(15);
+      expect(s.expiresAt).toBe(1_000_000 + 15 * 60_000);
+    });
+
+    it('snaps setAutoLock above the 60-minute cap down to 60', async () => {
+      const { bg } = bootWithClock(() => 1_000_000);
+      await bg.start();
+      const set = await dispatch(bg, { type: 'setAutoLock', minutes: 99 });
+      expect(set).toEqual({ ok: true, autoLockMinutes: 60 });
+    });
+  });
+
   it('unlock with the correct password populates the KeyVault and acks ok', async () => {
     const { walletId } = await seedWallet();
     const { bg, keyVault } = boot();
@@ -929,6 +1026,60 @@ describe('background service worker', () => {
       await dispatch(bg, { type: 'unlock', walletId, password: PASSWORD });
       await dispatch(bg, { type: 'getActiveAccount' });
       expect(onSwitch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Advanced / Codex wire', () => {
+    it('listWallets returns the vault seeds after unlock', async () => {
+      const { walletId } = await seedWallet();
+      const { bg } = boot();
+      await bg.start();
+      await dispatch(bg, { type: 'unlock', walletId, password: PASSWORD });
+
+      const res = await dispatch(bg, { type: 'listWallets' });
+      expect(res.ok).toBe(true);
+      if (!res.ok || !('wallets' in res)) return;
+      expect(res.wallets).toHaveLength(1);
+      expect(res.wallets[0].id).toBe(walletId);
+      expect(res.wallets[0].seedType).toBe('koala');
+      expect(res.wallets[0].isActive).toBe(true);
+    });
+
+    it('addAccountAtIndex derives a specific index and setActiveWallet acks', async () => {
+      const { walletId } = await seedWallet();
+      const { bg } = boot();
+      await bg.start();
+      await dispatch(bg, { type: 'unlock', walletId, password: PASSWORD });
+
+      const added = await dispatch(bg, { type: 'addAccountAtIndex', walletId, index: 5 });
+      expect(added.ok).toBe(true);
+      if (added.ok && 'account' in added) expect(added.account?.index).toBe(5);
+
+      const switched = await dispatch(bg, { type: 'setActiveWallet', walletId });
+      expect(switched).toEqual({ ok: true });
+    });
+
+    it('importCodex maps a locked vault and invalid JSON to discriminated reasons', async () => {
+      const { walletId } = await seedWallet();
+      const { bg } = boot();
+      await bg.start();
+
+      // Locked (no unlock yet) → locked, BEFORE any decrypt.
+      const locked = await dispatch(bg, {
+        type: 'importCodex',
+        json: '{}',
+        codexPassword: 'x',
+      });
+      expect(locked).toEqual({ ok: false, reason: 'locked' });
+
+      // Unlocked + malformed export → invalid-json (never throws across the wire).
+      await dispatch(bg, { type: 'unlock', walletId, password: PASSWORD });
+      const bad = await dispatch(bg, {
+        type: 'importCodex',
+        json: '{ not json',
+        codexPassword: 'x',
+      });
+      expect(bad).toEqual({ ok: false, reason: 'invalid-json' });
     });
   });
 });

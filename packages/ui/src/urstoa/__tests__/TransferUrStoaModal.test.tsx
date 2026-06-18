@@ -37,6 +37,7 @@ function renderModal(opts: {
   initialState?: TransferState;
   initialPreview?: TransferPreview | null;
   onRequireUnlock?: () => void;
+  onClose?: () => void;
 } = {}): StubControls {
   const send = vi.fn(async (_params: TransferParams) => {});
   const confirm = vi.fn(async () => {});
@@ -70,7 +71,7 @@ function renderModal(opts: {
     return (
       <TransferUrStoaModal
         open
-        onClose={() => {}}
+        onClose={opts.onClose ?? (() => {})}
         onRequireUnlock={opts.onRequireUnlock}
         useTransfer={() => hook}
       />
@@ -173,10 +174,11 @@ describe('TransferUrStoaModal', () => {
       initialPreview: { recipient: RECIPIENT, amount: '12.5' },
     });
 
-    // The preview panel shows the exact recipient + amount to review.
+    // The preview panel shows the exact recipient + amount to review. The amount
+    // renders via AmountDisplay at UrStoa's 3-decimal European format ("12,500").
     const previewPanel = screen.getByTestId('urstoa-transfer-preview');
     expect(previewPanel.textContent).toContain(RECIPIENT);
-    expect(previewPanel.textContent).toContain('12.5');
+    expect(previewPanel.textContent).toContain('12,500');
 
     // confirm() has NOT been called merely by reaching the preview.
     expect(controls.confirm).not.toHaveBeenCalled();
@@ -248,10 +250,15 @@ describe('TransferUrStoaModal', () => {
     expect(screen.getByTestId('urstoa-transfer-stage')).toBeTruthy();
   });
 
-  it('renders success with the request key and no false-success on other states', () => {
-    renderModal({ initialState: { status: 'success', requestKey: 'rk-xfer-9' } });
-    const panel = screen.getByTestId('urstoa-transfer-success');
-    expect(panel.textContent).toContain('rk-xfer-9');
+  it('on a SUBMITTED success, returns to overview (onClose) and shows NO inline rectangle', () => {
+    // The submitted outcome is handed to the floating tx toast; the page closes.
+    const onClose = vi.fn();
+    renderModal({
+      initialState: { status: 'success', requestKey: 'rk-xfer-9' },
+      onClose,
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('urstoa-transfer-success')).toBeNull();
   });
 
   it('renders a gas-payer-rejected error distinctly (not a false success)', () => {
@@ -262,14 +269,16 @@ describe('TransferUrStoaModal', () => {
     expect(screen.queryByTestId('urstoa-transfer-success')).toBeNull();
   });
 
-  it('renders pending with the request key, never a success and never a resend', () => {
-    renderModal({ initialState: { status: 'pending', requestKey: 'rk-lost-3' } });
-    const panel = screen.getByTestId('urstoa-transfer-pending');
-    expect(panel.textContent).toContain('rk-lost-3');
-    // A lost-response must NOT read as success and must NOT auto-resubmit: there
-    // is no confirm/resend control rendered in the pending state.
+  it('on a PENDING outcome, also returns to overview (the toast carries the unknown state)', () => {
+    const onClose = vi.fn();
+    renderModal({
+      initialState: { status: 'pending', requestKey: 'rk-lost-3' },
+      onClose,
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    // No inline pending/success rectangle, and never an auto-resend.
+    expect(screen.queryByTestId('urstoa-transfer-pending')).toBeNull();
     expect(screen.queryByTestId('urstoa-transfer-success')).toBeNull();
-    expect(screen.queryByTestId('urstoa-transfer-confirm')).toBeNull();
   });
 
   it('routes a locked error to onRequireUnlock instead of a generic error', () => {
@@ -281,6 +290,49 @@ describe('TransferUrStoaModal', () => {
     fireEvent.click(screen.getByTestId('urstoa-transfer-unlock'));
     expect(onRequireUnlock).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId('urstoa-transfer-error')).toBeNull();
+  });
+
+  /** A bare stub hook for the balance/MAX tests (no Harness state needed). */
+  function stubHook(): UseTransferUrStoaResult {
+    return {
+      state: { status: 'idle' },
+      preview: null,
+      send: vi.fn(async () => {}),
+      confirm: vi.fn(async () => {}),
+      reset: vi.fn(),
+    };
+  }
+
+  it('shows the wallet balance and MAX fills the amount with it (Stoa-send format)', () => {
+    render(
+      <TransferUrStoaModal
+        open
+        onClose={() => {}}
+        hookOptions={{ walletBalance: '62.5' }}
+        useTransfer={stubHook}
+      />,
+    );
+    // The balance row reads the sender's spendable UrStoa.
+    const balance = screen.getByTestId('urstoa-transfer-balance');
+    expect(balance).toBeInTheDocument();
+    // MAX is enabled and fills the amount with the exact balance string.
+    const max = screen.getByTestId('urstoa-transfer-max');
+    expect(max).not.toBeDisabled();
+    fireEvent.click(max);
+    expect(screen.getByTestId('urstoa-transfer-amount')).toHaveValue('62.5');
+  });
+
+  it('disables MAX and shows a dash when the balance is unknown', () => {
+    render(
+      <TransferUrStoaModal
+        open
+        onClose={() => {}}
+        hookOptions={{ walletBalance: null }}
+        useTransfer={stubHook}
+      />,
+    );
+    expect(screen.getByTestId('urstoa-transfer-max')).toBeDisabled();
+    expect(screen.getByTestId('urstoa-transfer-balance')).toHaveTextContent('—');
   });
 
   it('emits no console output that could leak the recipient or amount', () => {

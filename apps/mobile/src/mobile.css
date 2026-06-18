@@ -1,0 +1,22 @@
+/*
+ * Mobile (Capacitor WebView) root sizing. The shared `.shell` now declares
+ * `height: 100%` so the bottom nav pins to the bottom edge of a fixed-height
+ * surface (the 600px popup, the full-height side panel). For that to resolve on
+ * mobile the WebView's html/body/#root must establish a full-viewport height
+ * chain — otherwise `height:100%` has no sized ancestor and the shell collapses.
+ *
+ * This lives in the MOBILE app (not the shared theme.css) because each surface
+ * sizes its own root: the popup is a fixed 600px column, the tab is full-viewport
+ * centered, and mobile is the full device viewport here.
+ */
+html,
+body,
+#root {
+  height: 100%;
+  min-height: 100vh;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+}

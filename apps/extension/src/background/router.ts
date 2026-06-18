@@ -42,7 +42,9 @@ import {
   type WireAccount,
   type WireCommand,
   type WireSigData,
+  type WireWalletSummary,
 } from '../messaging/protocol';
+import type { WalletSummary } from '@stoawallet/core';
 import type {
   CollectUrStoaParams,
   CollectUrStoaResult,
@@ -72,6 +74,18 @@ function toWireAccount(account: AccountLike): WireAccount {
     publicKey: account.publicKey,
     account: account.account,
     derivationPath: account.derivationPath,
+  };
+}
+
+/** Map a public per-seed summary to its wire shape (accounts → WireAccount). */
+function toWireSummary(w: WalletSummary): WireWalletSummary {
+  return {
+    id: w.id,
+    name: w.name,
+    seedType: w.seedType,
+    isActive: w.isActive,
+    activeAccountIndex: w.activeAccountIndex,
+    accounts: w.accounts.map(toWireAccount),
   };
 }
 
@@ -405,6 +419,67 @@ export async function routeRequest(
           return { ok: false, reason: 'locked' };
         }
         return await handleUrStoaOp(manager, request, urstoaCore);
+
+      case 'listWallets':
+        // Public per-seed summary (no secret material) for the Advanced tab.
+        return ok({ wallets: manager.listWallets().map(toWireSummary) });
+
+      case 'listPureKeypairs':
+        // Public pure-key summaries (no secret material) for the Advanced tab.
+        return ok({ keys: manager.listPureKeypairs() });
+
+      case 'setActiveWallet':
+        if (!keyVault.isUnlocked()) {
+          return err('locked');
+        }
+        await manager.setActiveWallet(request.walletId);
+        return ok({});
+
+      case 'addAccountAtIndex': {
+        if (!keyVault.isUnlocked()) {
+          return err('locked');
+        }
+        const account = await manager.addAccountAtIndex(
+          request.walletId,
+          request.index,
+        );
+        return ok({ account: toWireAccount(account) });
+      }
+
+      case 'removeAccount':
+        // Removing a derived account drops only a re-derivable PUBLIC record —
+        // no secret is touched — so it is not gated on an unlocked vault (the
+        // manager rejects index #0 and unknown indices). Mirrors setActiveAccount.
+        await manager.removeAccount(request.walletId, request.index);
+        return ok({});
+
+      case 'renameWallet':
+        // Renaming a seed touches non-secret vault metadata only; not gated on unlock.
+        await manager.renameWallet(request.walletId, request.name);
+        return ok({});
+
+      case 'importCodex': {
+        if (!keyVault.isUnlocked()) {
+          return err('locked');
+        }
+        // The codex password transits the wire ONCE (popup → worker) like the
+        // unlock password; the decrypted secrets are re-sealed entirely here and
+        // only the count summary crosses back.
+        const outcome = await manager.importCodex(
+          request.json,
+          request.codexPassword,
+        );
+        return outcome.ok
+          ? ok({ summary: outcome.summary })
+          : { ok: false, reason: outcome.reason };
+      }
+
+      case 'getSession':
+      case 'setAutoLock':
+        // Auto-lock SESSION concerns are intercepted upstream in
+        // createBackground.handleMessage (they touch the worker's lock window, not
+        // the keyring) and never routed here. Covered for switch exhaustiveness.
+        return err('corrupt-envelope');
 
       default: {
         // An unrecognized/malformed request type (a trusted sender can still

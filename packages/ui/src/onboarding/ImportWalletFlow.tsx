@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 
+import { PasswordInput } from '../components/PasswordInput';
 import {
   useWallet,
   type WalletActionReason,
@@ -23,6 +24,7 @@ const REQUIRED_WORD_COUNT = 24;
 /** The two distinct, user-facing rejection messages. */
 const WORD_COUNT_MESSAGE = 'A 24-word seed phrase is required.';
 const INVALID_WORDS_MESSAGE = 'Invalid seed phrase. Please check your words.';
+const PASSWORD_MISMATCH_MESSAGE = 'Passwords do not match.';
 
 /**
  * Map a context rejection reason to its user-facing message. `word-count` and
@@ -55,8 +57,12 @@ export function ImportWalletFlow({
   const [step, setStep] = useState<Step>('phrase');
   const [raw, setRaw] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const passwordsMatch =
+    password.length > 0 && password === confirmPassword;
 
   const words = splitWords(raw);
   const hasRequiredCount = words.length === REQUIRED_WORD_COUNT;
@@ -81,6 +87,12 @@ export function ImportWalletFlow({
 
   const submitPassword = async (event: FormEvent) => {
     event.preventDefault();
+    // Catch a retype mismatch locally before any import work, so a typo in the
+    // encryption password can't silently seal a wallet the user can't unlock.
+    if (!passwordsMatch) {
+      setError(PASSWORD_MISMATCH_MESSAGE);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     const result = await importWallet(words, password);
@@ -178,16 +190,23 @@ export function ImportWalletFlow({
             to unlock.
           </p>
 
-          <label className={styles.label} htmlFor="import-password">
-            Password
-          </label>
-          <input
+          <PasswordInput
             id="import-password"
-            className={styles.input}
-            type="password"
+            label="Password"
             value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
+            onChange={(next) => {
+              setPassword(next);
+              setError(null);
+            }}
+            autoComplete="new-password"
+          />
+
+          <PasswordInput
+            id="import-confirm-password"
+            label="Confirm password"
+            value={confirmPassword}
+            onChange={(next) => {
+              setConfirmPassword(next);
               setError(null);
             }}
             autoComplete="new-password"
@@ -214,7 +233,7 @@ export function ImportWalletFlow({
             <button
               type="submit"
               className={styles.primary}
-              disabled={submitting || password.length === 0}
+              disabled={submitting || !passwordsMatch}
             >
               Import wallet
             </button>

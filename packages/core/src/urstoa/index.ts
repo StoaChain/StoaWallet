@@ -11,10 +11,11 @@ export {
   type CollectUrStoaDeps,
 } from './collect';
 
-// Holdings/earnings reads (chain 0): a thin wrapper over `getPrimordials` +
-// `getUrStoaBalance` surfacing ONLY the UrStoa-relevant fields (wallet/vault/
-// earnings/total). Wrapped-* is out of scope; the live SDK reads stay behind a
-// lazily-imported `.live.ts`.
+// Holdings/earnings reads (chain 0): the three authoritative `coin.*` reads —
+// `UR_UR|Balance` (wallet), `UR_URV|UserSupply` (vault stake), and
+// `URC_URV|ClaimableRewards` (claimable STOA) — plus the vault TOTAL for the
+// last-staker floor. Each figure is a precision-preserving string; the live
+// node-backed reads stay behind a lazily-imported `.live.ts`.
 export {
   getUrStoaHoldings,
   getVaultTotal,

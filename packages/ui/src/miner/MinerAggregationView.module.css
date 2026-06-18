@@ -20,6 +20,50 @@
   color: var(--color-stoa-slate);
 }
 
+/* The simple-view summary: total sweepable + chain count + target, one sentence. */
+.summary {
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.625rem;
+  background: var(--color-stoa-surface);
+  font-size: 0.875rem;
+  color: var(--color-stoa-light);
+  line-height: 1.5;
+}
+
+.summaryAmount {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  font-weight: 700;
+  color: var(--color-stoa-gold);
+}
+
+/* The advanced toggle — a slim, secondary text affordance, not a primary button. */
+.detailsToggle {
+  align-self: flex-start;
+  padding: 0.25rem 0;
+  background: transparent;
+  border: none;
+  color: var(--color-stoa-gold);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* An amount input that exceeds its chain balance — danger-bordered. */
+.inputError {
+  border-color: var(--color-status-danger, #ef4444);
+}
+
+.exceedWarn {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: var(--color-status-danger, #ef4444);
+}
+
 .label {
   display: flex;
   flex-direction: column;

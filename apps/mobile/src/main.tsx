@@ -5,6 +5,11 @@
 // boots without a `Buffer` global and signing throws "Buffer is not defined".
 import '@stoawallet/core/build/polyfills';
 
+// Mobile root sizing: gives the shared `.shell { height:100% }` a full-viewport
+// height chain in the Capacitor WebView so the bottom nav pins to the bottom edge.
+// A CSS side-effect import (not a crypto module), so it stays after the polyfill.
+import './mobile.css';
+
 import { App as CapacitorApp } from '@capacitor/app';
 import {
   KeyringManager,

@@ -21,7 +21,6 @@ function okHoldings(
     walletBalance: string;
     vaultBalance: string;
     vaultEarnings: string;
-    vaultStoaSupply: string;
   }> = {},
 ): UrStoaHoldingsResult {
   return {
@@ -30,9 +29,6 @@ function okHoldings(
       walletBalance: over.walletBalance ?? '0',
       vaultBalance: over.vaultBalance ?? '0',
       vaultEarnings: over.vaultEarnings ?? '0',
-      ...(over.vaultStoaSupply !== undefined
-        ? { vaultStoaSupply: over.vaultStoaSupply }
-        : {}),
     },
   };
 }

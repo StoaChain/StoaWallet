@@ -2,21 +2,42 @@ import {
   InMemoryKeyVault,
   InMemoryStorageAdapter,
 } from '@stoawallet/core/testing';
+import {
+  listAddressBook,
+  saveAddressBookEntry,
+  type StorageAdapter,
+} from '@stoawallet/core';
 import { coreInfo } from '@stoawallet/core';
-import type { GaslessGating, QrScanner, QrScanResult } from '@stoawallet/core';
+import type {
+  ConfirmSendResult,
+  GaslessGating,
+  PollProofAndContinueResult,
+  QrScanner,
+  QrScanResult,
+} from '@stoawallet/core';
 import {
   act,
   fireEvent,
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { WalletProvider } from '../../context/WalletContext';
+import { ToastProvider } from '../../toast/ToastContext';
+import { ToastViewport } from '../../toast/ToastViewport';
 import { SendForm } from '../SendForm';
-import type { ContextSendParams, ContextSendResult } from '../../context/WalletContext';
+import type {
+  ContextSendParams,
+  ContextSendResult,
+} from '../../context/WalletContext';
+import type {
+  ContextCrossChainStep0Result,
+  UseCrossChainTransferOptions,
+} from '../../crosschain/useCrossChainTransfer';
 
 const RECIPIENT =
   'k:1111111111111111111111111111111111111111111111111111111111111111';
@@ -45,12 +66,34 @@ function renderForm(opts: {
   gasless?: GaslessGating | ((chainId: string) => GaslessGating);
   onSuccess?: () => void;
   qrScanner?: QrScanner;
-} = {}): void {
+  /**
+   * The on-chain confirmation op. Defaults to a NEVER-resolving stub so a
+   * submitted send sits in `confirming` for the duration of the test without an
+   * async post-resolution setState (and never the live network). The
+   * confirmation-lifecycle tests inject a controllable stub.
+   */
+  awaitConfirmation?: (
+    requestKey: string,
+    chainId: string,
+  ) => Promise<ConfirmSendResult>;
+  /** Cross-chain hook stubs (step-0 op + SPV poll) for the cross-chain path. */
+  crossChainHookOptions?: UseCrossChainTransferOptions;
+  /** The FIXED source chain (the selected chain Send leaves from). Defaults to '0'. */
+  sourceChain?: string;
+  /** Spendable balance for the source chain (for the Balance line + Max button). */
+  getAvailableBalance?: (chainId: string) => string | null;
+  /** A pre-seeded storage adapter (e.g. with address-book entries) to inspect. */
+  storage?: StorageAdapter;
+  /** Wrap in a ToastProvider + render the ToastViewport so toasts are assertable. */
+  withToast?: boolean;
+  /** Unlock the source chain selector (the Cross-chain action passes false). */
+  lockSource?: boolean;
+} = {}): StorageAdapter {
   const gasless =
     typeof opts.gasless === 'string'
       ? () => opts.gasless as GaslessGating
       : opts.gasless;
-  const storage = new InMemoryStorageAdapter();
+  const storage = opts.storage ?? new InMemoryStorageAdapter();
   const keyVault = new InMemoryKeyVault();
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <WalletProvider
@@ -58,7 +101,14 @@ function renderForm(opts: {
       keyVault={keyVault}
       qrScanner={opts.qrScanner}
     >
-      {children}
+      {opts.withToast ? (
+        <ToastProvider>
+          {children}
+          <ToastViewport />
+        </ToastProvider>
+      ) : (
+        children
+      )}
     </WalletProvider>
   );
   render(
@@ -68,10 +118,22 @@ function renderForm(opts: {
           sendSameChain: opts.sendSameChain,
           gasless,
           onSuccess: opts.onSuccess,
+          getAvailableBalance: opts.getAvailableBalance,
+          awaitConfirmation:
+            opts.awaitConfirmation ?? (() => new Promise<ConfirmSendResult>(() => {})),
         }}
+        sourceChain={opts.sourceChain}
+        lockSource={opts.lockSource}
+        crossChainHookOptions={opts.crossChainHookOptions}
       />
     </Wrapper>,
   );
+  return storage;
+}
+
+/** Pick the DESTINATION chain (the only chain selector in Send). */
+function setDestination(to: string): void {
+  fireEvent.change(screen.getByTestId('send-chain'), { target: { value: to } });
 }
 
 /** Fill the recipient + amount + chain inputs and submit the (preview) form. */
@@ -118,13 +180,13 @@ describe('SendForm', () => {
     expect(coreInfo.chainCount).toBe(10);
   });
 
-  it('sends with the chain the user selected, not the default', async () => {
-    // A user who picks chain "7" must move funds on chain 7 — selecting then
-    // submitting must forward THAT chainId to the hook's send op.
+  it('sends on the FIXED source chain (the selected chain), forwarding it to the send op', async () => {
+    // Send locks the source to the selected chain (Chain 7 here); with the
+    // destination defaulting to it, the same-chain send op must receive chain 7.
     const send = vi.fn(async () => OK_RESULT);
-    renderForm({ sendSameChain: send });
+    renderForm({ sendSameChain: send, sourceChain: '7' });
     await act(async () => {
-      fillAndSend({ amount: '5', chainId: '7' });
+      fillAndSend({ amount: '5' }); // destination stays = source (7) → same-chain
     });
     expect(send).not.toHaveBeenCalled(); // preview only, no submit yet
     await act(async () => {
@@ -167,6 +229,42 @@ describe('SendForm', () => {
       fireEvent.click(screen.getByTestId('send-confirm'));
     });
     expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Review-send gating ──
+
+  it('disables Review send when the amount is zero (0 / 0.0)', () => {
+    renderForm();
+    fireEvent.change(screen.getByTestId('send-recipient'), {
+      target: { value: RECIPIENT },
+    });
+    fireEvent.change(screen.getByTestId('send-amount'), {
+      target: { value: '0.0' },
+    });
+    expect(screen.getByTestId('send-submit')).toBeDisabled();
+    // A real positive amount enables it.
+    fireEvent.change(screen.getByTestId('send-amount'), { target: { value: '1' } });
+    expect(screen.getByTestId('send-submit')).toBeEnabled();
+  });
+
+  it('disables Review send when no recipient is entered', () => {
+    renderForm();
+    fireEvent.change(screen.getByTestId('send-amount'), { target: { value: '5' } });
+    // No recipient yet → gated.
+    expect(screen.getByTestId('send-submit')).toBeDisabled();
+    fireEvent.change(screen.getByTestId('send-recipient'), {
+      target: { value: RECIPIENT },
+    });
+    expect(screen.getByTestId('send-submit')).toBeEnabled();
+  });
+
+  it('keeps Review send disabled for a malformed (non-k:) recipient', () => {
+    renderForm();
+    fireEvent.change(screen.getByTestId('send-recipient'), {
+      target: { value: 'not-a-k-account' },
+    });
+    fireEvent.change(screen.getByTestId('send-amount'), { target: { value: '5' } });
+    expect(screen.getByTestId('send-submit')).toBeDisabled();
   });
 
   it('shows different gasless badge text for verified vs simulate-only', () => {
@@ -218,6 +316,90 @@ describe('SendForm', () => {
     );
     expect(screen.getByTestId('send-success')).toHaveTextContent('rk-abc');
     expect(onSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a "confirming on-chain" indicator after submit while the outcome is unresolved', async () => {
+    // The gap the user hit: after submit there was no feedback. The form must now
+    // show a live "confirming on-chain" indicator until the mined result lands.
+    const send = vi.fn(async () => OK_RESULT);
+    renderForm({ sendSameChain: send }); // default never-resolving confirmation
+    await act(async () => {
+      fillAndSend({ amount: '5', chainId: '0' });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('send-confirm'));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('send-confirming')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('send-confirming')).toHaveTextContent(/confirming/i);
+  });
+
+  it('resolves to a CONFIRMED state with an explorer link once the tx is mined', async () => {
+    const send = vi.fn(async () => OK_RESULT);
+    const confirm = vi.fn(
+      async (): Promise<ConfirmSendResult> => ({ ok: true, status: 'confirmed' }),
+    );
+    renderForm({ sendSameChain: send, awaitConfirmation: confirm });
+    await act(async () => {
+      fillAndSend({ amount: '5', chainId: '0' });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('send-confirm'));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('send-confirmed')).toBeInTheDocument(),
+    );
+    expect(confirm).toHaveBeenCalledWith('rk-abc', '0');
+    const link = screen.getByTestId('send-explorer-link');
+    expect(link).toHaveAttribute(
+      'href',
+      'https://explorer.stoachain.com/transactions/rk-abc',
+    );
+  });
+
+  it('shows a distinct on-chain FAILED state with the reason when the tx fails on chain', async () => {
+    const send = vi.fn(async () => OK_RESULT);
+    const confirm = vi.fn(
+      async (): Promise<ConfirmSendResult> => ({
+        ok: true,
+        status: 'failed',
+        detail: 'insufficient funds',
+      }),
+    );
+    renderForm({ sendSameChain: send, awaitConfirmation: confirm });
+    await act(async () => {
+      fillAndSend({ amount: '5', chainId: '0' });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('send-confirm'));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('send-failed-onchain')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('send-failed-onchain')).toHaveTextContent(
+      /insufficient funds/i,
+    );
+  });
+
+  it('shows an honest "couldn\'t confirm" state (not failure) when the listen times out', async () => {
+    // A confirmation timeout is NOT an on-chain failure — the tx may still be
+    // processing. The form must say so and point to the explorer, never resubmit.
+    const send = vi.fn(async () => OK_RESULT);
+    const confirm = vi.fn(
+      async (): Promise<ConfirmSendResult> => ({ ok: false, reason: 'timeout' }),
+    );
+    renderForm({ sendSameChain: send, awaitConfirmation: confirm });
+    await act(async () => {
+      fillAndSend({ amount: '5', chainId: '0' });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('send-confirm'));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('send-unconfirmed')).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId('send-failed-onchain')).not.toBeInTheDocument();
   });
 
   it('renders the distinct gas-payer-rejected message with the self-paid fallback affordance, not success', async () => {
@@ -466,5 +648,314 @@ describe('SendForm', () => {
       screen.queryByTestId('send-scan-permission'),
     ).not.toBeInTheDocument();
     expect(screen.getByTestId('send-recipient')).toHaveValue('');
+  });
+
+  // ── Cross-chain from the Send button ──
+
+  it('shows the FIXED source chain and stays same-chain when the destination equals it', async () => {
+    // The source is fixed to the selected chain (Chain 4) and shown read-only; the
+    // destination defaults to it, so the resting state is a same-chain send — the
+    // gasless badge shows, not the cross-chain note. There is no source selector.
+    const send = vi.fn(async () => OK_RESULT);
+    renderForm({ sendSameChain: send, gasless: 'verified', sourceChain: '4' });
+    expect(screen.getByTestId('send-source-chain')).toHaveTextContent('Chain 4');
+    expect(screen.getByTestId('send-chain')).toHaveValue('4');
+    expect(screen.queryByTestId('send-crosschain-note')).not.toBeInTheDocument();
+    expect(screen.getByTestId('gasless-badge')).toBeInTheDocument();
+  });
+
+  it('switches to a fully-sponsored cross-chain transfer when the destination differs, and drives it to completion', async () => {
+    // Picking a destination different from the (fixed) source routes the Send
+    // button through the cross-chain flow (step-0 burn → SPV → continuation) — the
+    // SAME sponsored core path the dedicated Cross-chain action uses.
+    const step0 = vi.fn(
+      async (): Promise<ContextCrossChainStep0Result> => ({
+        ok: true,
+        requestKey: 'rk-step0',
+        sourceChain: '0',
+        targetChain: '1',
+      }),
+    );
+    const poll = vi.fn(
+      async (): Promise<PollProofAndContinueResult> => ({
+        ok: true,
+        continuationKey: 'ck-done',
+      }),
+    );
+    const sameChainSend = vi.fn(async () => OK_RESULT);
+    renderForm({
+      sendSameChain: sameChainSend,
+      sourceChain: '0',
+      crossChainHookOptions: {
+        sendCrossChainStep0: step0,
+        pollProofAndContinue: poll,
+      },
+    });
+
+    // Destination 1 (source fixed at 0) reveals the cross-chain disclosure.
+    await act(async () => {
+      setDestination('1');
+    });
+    expect(screen.getByTestId('send-crosschain-note')).toBeInTheDocument();
+    expect(screen.queryByTestId('gasless-badge')).not.toBeInTheDocument();
+
+    // Review → the cross-chain preview shows the route, then confirm fires step-0.
+    await act(async () => {
+      fillAndSend({ amount: '3.25' });
+    });
+    const preview = screen.getByTestId('send-xchain-preview');
+    expect(preview).toHaveTextContent('Chain 0 → Chain 1');
+    expect(sameChainSend).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('send-xchain-confirm'));
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('send-xchain-success')).toBeInTheDocument(),
+    );
+    expect(step0).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceChain: '0', targetChain: '1', amount: '3.25' }),
+    );
+    expect(screen.getByTestId('send-xchain-success')).toHaveTextContent('ck-done');
+  });
+
+  // ── Gas sponsorship disclosure ──
+
+  it('discloses same-chain gas is sponsored by the Ouronet Gas Station (full balance sendable)', () => {
+    renderForm({ sourceChain: '0', gasless: 'verified' });
+    const sponsorship = screen.getByTestId('send-sponsorship');
+    expect(sponsorship).toHaveTextContent(/Ouronet Gas Station/i);
+    expect(sponsorship).toHaveTextContent(/full balance/i);
+    const link = within(sponsorship).getByRole('link', {
+      name: /Ouronet Gas Station/i,
+    });
+    expect(link).toHaveAttribute(
+      'href',
+      'https://explorer.stoachain.com/accounts/c:iQQFWj6gWtpGEzhM_O5ekW1QtnQQy55R8BRPGhj_0FU',
+    );
+  });
+
+  it('discloses the cross-chain 2-step gas model from chain 0: Step 0 GasStation, Step 1 kadena-xchain-gas', async () => {
+    renderForm({ sourceChain: '0' });
+    await act(async () => {
+      setDestination('1');
+    });
+    const note = screen.getByTestId('send-crosschain-note');
+    expect(note).toHaveTextContent(/Step 0/);
+    expect(note).toHaveTextContent(/Step 1/);
+    // Step 0 (burn from chain 0) → Ouronet Gas Station.
+    expect(
+      within(note).getByRole('link', { name: /Ouronet Gas Station/i }),
+    ).toHaveAttribute(
+      'href',
+      'https://explorer.stoachain.com/accounts/c:iQQFWj6gWtpGEzhM_O5ekW1QtnQQy55R8BRPGhj_0FU',
+    );
+    // Step 1 (continuation on the target) → kadena-xchain-gas.
+    expect(
+      within(note).getByRole('link', { name: /kadena-xchain-gas/i }),
+    ).toHaveAttribute(
+      'href',
+      'https://explorer.stoachain.com/accounts/kadena-xchain-gas',
+    );
+  });
+
+  it('uses kadena-xchain-gas for Step 0 when the source is NOT chain 0', async () => {
+    renderForm({ sourceChain: '5' });
+    await act(async () => {
+      setDestination('1');
+    });
+    const note = screen.getByTestId('send-crosschain-note');
+    // Both legs are kadena-xchain-gas when leaving a non-zero chain (no GasStation).
+    expect(note).not.toHaveTextContent(/Ouronet Gas Station/i);
+    const xchainLinks = within(note).getAllByRole('link', {
+      name: /kadena-xchain-gas/i,
+    });
+    expect(xchainLinks).toHaveLength(2);
+  });
+
+  // ── Editable source (Cross-chain action) ──
+
+  it('locks the source by default (Send) — the From chain is a read-only chip', () => {
+    renderForm({ sourceChain: '4' });
+    expect(screen.getByTestId('send-source-chain').tagName).not.toBe('SELECT');
+    expect(screen.getByTestId('send-source-chain')).toHaveTextContent('Chain 4');
+  });
+
+  it('UNLOCKS the source when lockSource is false (Cross-chain), keeping source ≠ destination', async () => {
+    renderForm({ lockSource: false, sourceChain: '0' });
+    const from = screen.getByTestId('send-source-chain') as HTMLSelectElement;
+    expect(from.tagName).toBe('SELECT');
+
+    // Pick a different destination → cross-chain.
+    await act(async () => {
+      setDestination('1');
+    });
+    expect(screen.getByTestId('send-crosschain-note')).toHaveTextContent(
+      'Chain 0 → Chain 1',
+    );
+
+    // Change the SOURCE onto the destination (1) → the destination bumps off it.
+    await act(async () => {
+      fireEvent.change(from, { target: { value: '1' } });
+    });
+    expect((screen.getByTestId('send-chain') as HTMLSelectElement).value).not.toBe(
+      '1',
+    );
+  });
+
+  // ── Source balance + Max ──
+
+  it('shows the source-chain balance under the amount and Max fills it', async () => {
+    renderForm({ sourceChain: '0', getAvailableBalance: () => '12.5' });
+    const balance = screen.getByTestId('send-source-balance');
+    expect(balance).toHaveTextContent('Balance on #0');
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('send-max'));
+    });
+    expect(screen.getByTestId('send-amount')).toHaveValue('12.5');
+  });
+
+  it('disables Max when the source balance is unknown', () => {
+    renderForm({ sourceChain: '0', getAvailableBalance: () => null });
+    expect(screen.getByTestId('send-max')).toBeDisabled();
+  });
+
+  // ── Send to self ──
+
+  it('Send to self locks the recipient, advances the destination, and forces cross-chain', async () => {
+    renderForm({ sourceChain: '0' });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('send-self-toggle'));
+    });
+    // Recipient is locked (filled from the sender, not editable).
+    expect(screen.getByTestId('send-recipient')).toBeDisabled();
+    // Destination advanced to the next chain → cross-chain.
+    expect(screen.getByTestId('send-chain')).toHaveValue('1');
+    expect(screen.getByTestId('send-crosschain-note')).toBeInTheDocument();
+    // The source chain cannot be chosen as the destination while self is on.
+    const sourceOption = within(screen.getByTestId('send-chain')).getByRole(
+      'option',
+      { name: /Chain 0/ },
+    );
+    expect(sourceOption).toBeDisabled();
+  });
+
+  // ── Address book ──
+
+  it('picks a saved recipient from the address-book dropdown', async () => {
+    const storage = new InMemoryStorageAdapter();
+    await saveAddressBookEntry(storage, { name: 'Alice', address: RECIPIENT });
+    renderForm({ storage });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('send-book-toggle'));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('send-book-entry')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('send-book-entry')).toHaveTextContent('Alice');
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('send-book-entry'));
+    });
+    expect(screen.getByTestId('send-recipient')).toHaveValue(RECIPIENT);
+  });
+
+  it('offers to save an UNKNOWN recipient after a successful send, and persists it', async () => {
+    const storage = new InMemoryStorageAdapter();
+    const send = vi.fn(async () => OK_RESULT);
+    renderForm({ sendSameChain: send, storage });
+    await act(async () => {
+      fillAndSend({ amount: '5' });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('send-confirm'));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('send-save-address')).toBeInTheDocument(),
+    );
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('send-save-name'), {
+        target: { value: 'Bob' },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('send-save-confirm'));
+    });
+    await waitFor(async () => {
+      expect(await listAddressBook(storage)).toEqual([
+        { name: 'Bob', address: RECIPIENT },
+      ]);
+    });
+  });
+
+  // ── Transaction toast ──
+
+  it('raises a self-dismissing toast: PENDING on submit, then CONFIRMED ✓ with explorer link', async () => {
+    const send = vi.fn(async () => OK_RESULT);
+    const gate = deferred<ConfirmSendResult>();
+    const confirm = vi.fn(() => gate.promise);
+    renderForm({ sendSameChain: send, awaitConfirmation: confirm, withToast: true });
+    await act(async () => {
+      fillAndSend({ amount: '5' });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('send-confirm'));
+    });
+    // A pending toast appears immediately on submit.
+    await waitFor(() =>
+      expect(screen.getByTestId('toast')).toHaveAttribute('data-status', 'pending'),
+    );
+    // Once the on-chain outcome resolves, the SAME toast flips to success.
+    await act(async () => {
+      gate.resolve({ ok: true, status: 'confirmed' });
+      await gate.promise;
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('toast')).toHaveAttribute('data-status', 'success'),
+    );
+    expect(screen.getByTestId('toast')).toHaveTextContent(/confirmed/i);
+    expect(screen.getByTestId('toast-explorer-link')).toHaveAttribute(
+      'href',
+      'https://explorer.stoachain.com/transactions/rk-abc',
+    );
+  });
+
+  it('raises an ERROR toast when the transaction fails on-chain', async () => {
+    const send = vi.fn(async () => OK_RESULT);
+    const confirm = vi.fn(
+      async (): Promise<ConfirmSendResult> => ({
+        ok: true,
+        status: 'failed',
+        detail: 'insufficient funds',
+      }),
+    );
+    renderForm({ sendSameChain: send, awaitConfirmation: confirm, withToast: true });
+    await act(async () => {
+      fillAndSend({ amount: '5' });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('send-confirm'));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('toast')).toHaveAttribute('data-status', 'error'),
+    );
+    expect(screen.getByTestId('toast')).toHaveTextContent(/failed/i);
+  });
+
+  it('does NOT offer to save a recipient already in the address book', async () => {
+    const storage = new InMemoryStorageAdapter();
+    await saveAddressBookEntry(storage, { name: 'Known', address: RECIPIENT });
+    const send = vi.fn(async () => OK_RESULT);
+    renderForm({ sendSameChain: send, storage });
+    await act(async () => {
+      fillAndSend({ amount: '5' });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('send-confirm'));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('send-success')).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId('send-save-address')).not.toBeInTheDocument();
   });
 });

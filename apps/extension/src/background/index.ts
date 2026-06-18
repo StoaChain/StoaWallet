@@ -149,6 +149,14 @@ const background = createBackground({
 
 // Register the message router. The listener returns `true` so the runtime keeps
 // the channel open for the async sendResponse (the MV3 contract).
+//
+// KEEPALIVE-BY-POLLING: the popup polls `getSession` every ~10s while open. Each
+// inbound message resets the MV3 worker's ~30s idle-termination timer, so the
+// in-memory unlocked session SURVIVES the user filling a send form (the fix for
+// "locked on every send"). `getSession` is also the auto-lock tick — it pokes the
+// timestamp window (locking if elapsed) and reports the live expiry the popup
+// counts down from. It deliberately does NOT re-arm the window (only real keyring
+// ops are activity), so the lock still fires at the configured time.
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
   background.handleMessage(message, sender, sendResponse),
 );

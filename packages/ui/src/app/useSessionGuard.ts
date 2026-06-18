@@ -39,35 +39,55 @@ export interface SessionGuard {
 }
 
 export function useSessionGuard(): SessionGuard {
-  const { refreshRemoteUnlocked, sessionExpired, reportSessionLocked } =
+  const { refreshRemoteUnlocked, remoteUnlocked, sessionExpired, reportSessionLocked } =
     useWallet();
-  const [status, setStatus] = useState<SessionGuardStatus>('checking');
+  // Whether the first background query has resolved. Until it does the guard
+  // reports `checking`; afterwards it derives the status REACTIVELY from the
+  // context's `remoteUnlocked`, so an in-popup unlock/lock (which flips that
+  // state) re-renders the shell to HOME / re-unlock without a fresh mount query.
+  const [resolved, setResolved] = useState(false);
+  // A fail-safe sticky `locked` for the MV3 rejected-query case, where there IS
+  // a background (so `remoteUnlocked` would not be the local-path null) but the
+  // query could not establish a connection.
+  const [queryFailed, setQueryFailed] = useState(false);
 
   useEffect(() => {
     let alive = true;
     void (async () => {
       try {
         // `refreshRemoteUnlocked` returns null on the web/test path (no
-        // background): there is nothing to query, so defer to the local state.
-        const unlocked = await refreshRemoteUnlocked();
+        // background) and stores the queried boolean into `remoteUnlocked`
+        // otherwise — the guard derives its status from that reactive value.
+        await refreshRemoteUnlocked();
         if (!alive) return;
-        if (unlocked === null) {
-          setStatus('local');
-        } else {
-          setStatus(unlocked ? 'unlocked' : 'locked');
-        }
+        setResolved(true);
       } catch {
         // The background query rejected — the MV3 "could not establish
         // connection / port closed" case while the SW spins up. Fail SAFE to
         // `locked` (route to unlock) rather than spinning on `checking` forever.
         if (!alive) return;
-        setStatus('locked');
+        setQueryFailed(true);
+        setResolved(true);
       }
     })();
     return () => {
       alive = false;
     };
   }, [refreshRemoteUnlocked]);
+
+  // Derive the status from the reactive context state. Until the first query
+  // resolves → `checking`. A rejected query is sticky `locked`. Then: `null`
+  // (no background) → `local` (defer to `activeAccount`); a boolean → the live
+  // background unlocked-state, which a successful in-popup unlock/lock updates.
+  const status: SessionGuardStatus = !resolved
+    ? 'checking'
+    : queryFailed
+      ? 'locked'
+      : remoteUnlocked === null
+        ? 'local'
+        : remoteUnlocked
+          ? 'unlocked'
+          : 'locked';
 
   return { status, sessionExpired, reportSessionLocked };
 }

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Wallet-class CSP for the full-tab surface. This page is a TOP-LEVEL browser
+      tab (opened via chrome.tabs.create), so it does NOT need the approval page's
+      `frame-ancestors 'none'` clickjacking guard — it is not framed. But it shows
+      the 24-word recovery phrase during onboarding, so it keeps a locked-down
+      posture: only same-origin ('self') scripts/resources, no inline/eval/remote
+      code, no <base> hijack.
+
+      `connect-src 'self' https:` is REQUIRED: this page does live RPC (balances,
+      reads, submits) to the StoaChain node — node1/node2 AND any user-set custom
+      https node (Settings). Without it, `default-src 'self'` blocks every node
+      fetch (the bug this fixes). The wallet code is all same-origin (script-src
+      'self', no remote/eval), so there is no injection vector to abuse the open
+      https connect. The popup inherits the manifest CSP (open connect); this is a
+      tighter superset for the seed-showing surface.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; object-src 'self'; connect-src 'self' https:; base-uri 'none'"
+    />
+    <title>StoaWallet</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/tab/index.tsx"></script>
+  </body>
+</html>

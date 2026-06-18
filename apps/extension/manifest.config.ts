@@ -60,8 +60,14 @@ export default defineManifest({
     48: 'public/icons/icon-48.png',
     128: 'public/icons/icon-128.png',
   },
-  permissions: ['storage', 'idle'],
+  permissions: ['storage', 'idle', 'sidePanel'],
   host_permissions: ['https://node1.stoachain.com/*', 'https://node2.stoachain.com/*'],
+  // The docked side-panel surface the popup opens via `chrome.sidePanel.open`. A
+  // manifest-referenced HTML page, so @crxjs auto-bundles it (like the popup) and
+  // emits it to dist — no separate Rollup input needed. It reuses the popup's
+  // platform seams (ChromeStorageAdapter + BackgroundKeyVaultProxy), so keys stay
+  // in the background SW, never in the panel.
+  side_panel: { default_path: 'src/sidepanel/index.html' },
   content_security_policy: {
     extension_pages: "script-src 'self'; object-src 'self'",
   },

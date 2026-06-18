@@ -50,6 +50,8 @@ interface Manifest {
   web_accessible_resources?: unknown;
   externally_connectable?: unknown;
   content_security_policy?: { extension_pages?: string };
+  permissions?: string[];
+  side_panel?: { default_path?: string };
 }
 
 let manifest: Manifest;
@@ -231,6 +233,38 @@ describe('FRAMING / CLICKJACKING — approval surface (T7.8 forward contract ENF
     const cspMeta = metaContent(readFileSync(APPROVAL_HTML, 'utf8'), 'Content-Security-Policy') ?? '';
     const loosened = cspMeta.replace(/;?\s*frame-ancestors\s+'none'/i, '');
     expect(/frame-ancestors\s+'none'/i.test(loosened)).toBe(false);
+  });
+});
+
+describe('Chrome side panel wiring', () => {
+  it('declares the sidePanel permission so chrome.sidePanel.open is callable', () => {
+    // The side-panel surface is opened programmatically from the popup; Chrome
+    // requires the `sidePanel` permission for `chrome.sidePanel.open`.
+    expect(manifest.permissions ?? []).toContain('sidePanel');
+  });
+
+  it('points side_panel.default_path at an emitted side-panel page', () => {
+    const rel = manifest.side_panel?.default_path;
+    expect(typeof rel, 'side_panel.default_path must be set').toBe('string');
+    expect(existsSync(distPath(rel as string)), `side panel page ${rel} must be emitted`).toBe(
+      true,
+    );
+  });
+
+  it('keeps least-privilege: sidePanel is the ONLY added permission alongside storage + idle', () => {
+    // sidePanel is a legit addition; the wallet still must not gain tabs/scripting/
+    // webRequest. Assert the permission set is exactly the expected trio.
+    const perms = [...(manifest.permissions ?? [])].sort();
+    expect(perms).toEqual(['idle', 'sidePanel', 'storage']);
+  });
+
+  it('the validator still passes with the sidePanel permission present (it is allowed)', () => {
+    const result = auditStoreReadiness(
+      manifest as unknown as Record<string, unknown>,
+      DIST,
+    );
+    expect(result.errors).toEqual([]);
+    expect(result.ok).toBe(true);
   });
 });
 

@@ -1,32 +1,33 @@
-/* Import-wallet flow — dark gold-on-near-black, CSS Modules over theme.css vars. */
+/* Import-wallet flow — rendered inside <BrandSplash>'s content slot (gold-orb
+ * background + centred column come from the splash). This styles the import
+ * card: the seed-word chips, the phrase textarea, and the rounded-full gold
+ * primary (hero glow) + glass secondary buttons that match the splash. */
 
 .flow {
   font-family: var(--font-sans);
   color: var(--color-stoa-light);
-  max-width: 32rem;
-  margin: 0 auto;
+  width: 100%;
 }
 
 .panel {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  padding: 1.5rem;
-  background: var(--color-stoa-surface);
-  border: 1px solid var(--color-stoa-border);
-  border-radius: 0.75rem;
+  text-align: left;
 }
 
 .heading {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
+  text-align: center;
   color: var(--color-stoa-light);
 }
 
 .hint {
   margin: 0;
   font-size: 0.875rem;
+  text-align: center;
   color: var(--color-stoa-slate);
 }
 
@@ -145,35 +146,55 @@
   padding: 0.7rem 1rem;
   font-family: inherit;
   font-size: 0.9375rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-stoa-dark);
   background: var(--color-stoa-gold);
-  border: 1px solid var(--color-stoa-gold);
-  border-radius: 0.5rem;
+  border: none;
+  border-radius: 999px;
   cursor: pointer;
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.primary:hover:not(:disabled) {
+  background: #f5d76e;
+  transform: scale(1.02);
+  box-shadow: 0 0 30px rgba(212, 175, 55, 0.5);
 }
 
 .primary:disabled {
   color: var(--color-stoa-slate);
   background: transparent;
-  border-color: var(--color-stoa-border);
+  border: 1px solid var(--color-stoa-border);
+  box-shadow: none;
   cursor: not-allowed;
 }
 
+/* Glass secondary — translucent surface, rounded-full, lighten on hover. */
 .secondary {
   padding: 0.7rem 1rem;
   font-family: inherit;
   font-size: 0.9375rem;
   font-weight: 600;
-  color: var(--color-stoa-gold);
-  background: transparent;
-  border: 1px solid var(--color-stoa-gold);
-  border-radius: 0.5rem;
+  color: var(--color-stoa-light);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
   cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .secondary:disabled {
   color: var(--color-stoa-slate);
-  border-color: var(--color-stoa-border);
   cursor: not-allowed;
 }

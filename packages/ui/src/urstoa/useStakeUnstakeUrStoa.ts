@@ -261,7 +261,7 @@ export function useStakeUnstakeUrStoa(
         return;
       }
 
-      // Format to the 24-decimal Pact scale via the SDK formatter (never a raw
+      // Format to UrStoa's 3-decimal Pact scale via the SDK formatter (never a raw
       // string, never a hand-rolled trim — T12.1 owns the decimal math).
       let formattedAmount: string;
       try {

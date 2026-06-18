@@ -5,10 +5,17 @@
 .shell {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  /* Fill the fixed-height host surface (the 600px popup body / the full-height
+   * side panel / the full-viewport mobile + tab roots). The shell itself does NOT
+   * scroll — `.body` is the single scroll region — so the bottom nav, a normal-flow
+   * flex child after the flex:1 body, is always pinned to the bottom edge. */
+  height: 100%;
+  overflow: hidden;
   width: 100%;
   max-width: 420px;
   margin: 0 auto;
+  /* Positioning context for the floating toast viewport (pinned above the nav). */
+  position: relative;
   background: var(--stoa-bg, #0d0d0d);
   color: var(--stoa-text, #f5f5f5);
   font-family: var(
@@ -26,7 +33,109 @@
   justify-content: space-between;
   gap: 8px;
   padding: 12px 16px;
-  border-bottom: 1px solid #262626;
+  border-bottom: 1px solid var(--color-stoa-border, #2d2d2d);
+}
+
+/*
+ * The unlocked HOME top bar (MultiversX-style): a single compact row. LEFT holds
+ * the brand + the seed cluster (seed name, network, type chip); RIGHT holds the
+ * icon-button row (side-panel / settings / expand / lock). Kept tight so the bar
+ * + the balance card fit the popup without scrolling.
+ */
+.topBar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-stoa-border, #2d2d2d);
+}
+
+.topBarLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.seedCluster {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.seedName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-stoa-light, #f5f5f5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seedMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.network {
+  font-size: 11px;
+  color: var(--color-stoa-slate, #9aa6b2);
+  white-space: nowrap;
+}
+
+/* The color-coded seed-type chip (koala→pink, etc.); colors set inline per type. */
+.seedTypeChip {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* The header's right column: the icon row on top, the sub-view back button
+   beneath it (both above the header divider) so the back never claims its own row. */
+.headerControls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.headerControlsRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* The header icon buttons: a compact transparent square with a stroke SVG that
+ * goes gold on hover, matching the nav-icon style. */
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--color-stoa-slate, #9aa6b2);
+  cursor: pointer;
+  padding: 0;
+}
+
+.iconButton:hover {
+  color: var(--color-stoa-gold, #d4af37);
+  background: rgba(212, 175, 55, 0.1);
+}
+
+.headerIcon {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .brand {
@@ -59,56 +168,162 @@
 .body {
   flex: 1;
   overflow-y: auto;
+  /* The single scroll region between the header and the bottom nav. The nav is a
+   * sibling flex child (no longer overlays the scroll area), so no bottom-padding
+   * clearance hack is needed. */
   padding: 16px;
 }
 
-.tablist {
+/* The settings tab stacks its setting panels (auto-lock, node) vertically. */
+.settingsStack {
   display: flex;
-  gap: 2px;
-  padding: 0 8px;
-  border-top: 1px solid #262626;
-  background: var(--stoa-surface, #1a1a1a);
+  flex-direction: column;
+  gap: 12px;
 }
 
-.tab {
-  flex: 1;
+/* The sub-view BACK button — a compact pill INSIDE the header, beneath the icon
+   row (above the divider), so it adds no extra vertical row above the form. */
+.subviewBack {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  border-radius: 999px;
   background: transparent;
-  border: none;
-  border-top: 2px solid transparent;
-  color: var(--stoa-muted, #a3a3a3);
-  padding: 10px 4px;
+  color: var(--color-stoa-slate, #9aa6b2);
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
 }
 
-.tabActive {
-  color: var(--stoa-gold, #d4af37);
-  border-top-color: var(--stoa-gold, #d4af37);
+.subviewBack:hover {
+  color: var(--color-stoa-gold, #d4af37);
+  border-color: var(--color-stoa-gold, #d4af37);
 }
 
+/*
+ * The bottom nav: a rounded pill bar pinned to the bottom edge of the shell. It
+ * is a normal-flow flex child AFTER the `flex:1` body, so it always sits at the
+ * bottom of the fixed-height surface regardless of how tall the active tab's
+ * content is (the body scrolls within the remaining space). Five equal
+ * destinations with an inline-SVG icon + a short label; the active destination is
+ * gold (the brand accent), the rest muted.
+ */
+.bottomNav {
+  flex-shrink: 0;
+  z-index: 10;
+  display: flex;
+  gap: 2px;
+  margin: 8px 12px 12px;
+  padding: 6px;
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  border-radius: 18px;
+  background: var(--color-stoa-surface, #1a1a1a);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+.navButton {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  color: var(--color-stoa-slate, #9aa6b2);
+  padding: 8px 2px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.navButton:hover {
+  color: var(--color-stoa-light, #f5f5f5);
+}
+
+.navButtonActive {
+  color: var(--color-stoa-gold, #d4af37);
+  background: rgba(212, 175, 55, 0.12);
+}
+
+.navIcon {
+  display: block;
+}
+
+.navLabel {
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* The expand affordance floats over the onboarding splash (the splash owns the
+ * brand identity, so the onboarding header no longer carries the wordmark). */
+.headerFloat {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+}
+
+/* Onboarding landing choice — the gold primary (Create) + glass secondary
+ * (Import) mirror the hero buttons: rounded-full, gold glow on the primary,
+ * translucent glass on the secondary. Stacked for a centred premium column. */
 .modeToggle {
   display: flex;
-  gap: 4px;
-  margin-bottom: 16px;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
 }
 
 .modeButton {
-  flex: 1;
-  background: transparent;
-  border: 1px solid #3a3a3a;
-  color: var(--stoa-muted, #a3a3a3);
-  border-radius: 8px;
-  padding: 8px;
+  width: 100%;
+  border: none;
+  border-radius: 999px;
+  padding: 0.75rem 1rem;
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  font-weight: 700;
   cursor: pointer;
+  background: var(--color-stoa-gold, #d4af37);
+  color: var(--color-stoa-dark, #0a0a0a);
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
 }
 
+.modeButton:hover {
+  background: #f5d76e;
+  transform: scale(1.03);
+  box-shadow: 0 0 30px rgba(212, 175, 55, 0.5);
+}
+
+/* The Import button is the glass secondary — translucent, subtle border. */
+.modeButtonGlass {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-stoa-light, #f5f5f5);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.modeButtonGlass:hover {
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: none;
+}
+
+/* The active tab keeps a gold ring so the selected inline flow is clear. */
 .modeButtonActive {
-  border-color: var(--stoa-gold, #d4af37);
-  color: var(--stoa-gold, #d4af37);
+  outline: 2px solid var(--color-stoa-gold, #d4af37);
+  outline-offset: 2px;
 }
 
 .placeholder {
-  color: var(--stoa-muted, #a3a3a3);
+  color: var(--color-stoa-slate, #a3a3a3);
   text-align: center;
-  padding: 24px 0;
+  padding: 20px 0 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
 }

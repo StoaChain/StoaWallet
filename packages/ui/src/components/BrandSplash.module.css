@@ -1,0 +1,134 @@
+/* The unlock/onboarding brand splash — reproduces the StoaChain hero LOOK in
+ * pure CSS (gold orb glow + dark radial scrim over near-black, glowing logo,
+ * gold-gradient wordmark, staggered fade/slide entrance). Splash-only: the live
+ * wallet shell never mounts this, so the brand background stays off the
+ * palette-only wallet tabs. */
+
+.splash {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 2rem 1.5rem;
+  overflow: hidden;
+  background: var(--color-stoa-dark);
+  color: var(--color-stoa-light);
+  font-family: var(--font-sans);
+}
+
+/* Gold "orb" glow near the top — mimics the hero's `bg-stoa-gold/15 blur-[120px]`
+ * over the near-black base. Cheap: one absolutely-positioned blurred radial. */
+.orb {
+  position: absolute;
+  top: -160px;
+  left: 50%;
+  width: 460px;
+  height: 320px;
+  transform: translateX(-50%);
+  background: var(--color-stoa-gold);
+  opacity: 0.15;
+  filter: blur(110px);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Dark radial scrim for headline contrast over the orb. */
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(0, 0, 0, 0.25) 45%,
+    rgba(0, 0, 0, 0) 75%
+  );
+  pointer-events: none;
+}
+
+.column {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 26rem;
+  text-align: center;
+}
+
+.logoWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.25rem;
+  animation: splash-rise 0.7s ease-out both;
+}
+
+/* Soft gold-glow halo behind the logo (the hero's `-inset-4 blur-xl` glow). */
+.logoGlow {
+  position: absolute;
+  width: 132px;
+  height: 132px;
+  background: var(--color-stoa-gold);
+  filter: blur(40px);
+  opacity: 0.25;
+  border-radius: 50%;
+}
+
+.logo {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.5));
+}
+
+/* Gold-gradient wordmark — mirrors the hero's `from-stoa-gold to-yellow-200`. */
+.wordmark {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(90deg, #d4af37, #fde68a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: splash-rise 0.7s ease-out 0.1s both;
+}
+
+.tagline {
+  margin: 0.5rem 0 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--color-stoa-gold);
+  animation: splash-rise 0.7s ease-out 0.18s both;
+}
+
+.content {
+  width: 100%;
+  margin-top: 1.75rem;
+  animation: splash-rise 0.7s ease-out 0.26s both;
+}
+
+@keyframes splash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Respect reduced-motion: skip the entrance animation but keep the layout. */
+@media (prefers-reduced-motion: reduce) {
+  .logoWrap,
+  .wordmark,
+  .tagline,
+  .content {
+    animation: none;
+  }
+}

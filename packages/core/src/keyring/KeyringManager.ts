@@ -44,6 +44,9 @@ import {
   type ResolveSigningKeypairsResult,
 } from '../advanced';
 
+import { smartDecrypt, smartEncrypt } from '@stoachain/stoa-core/crypto';
+
+import { importCodex as coreImportCodex, type ImportCodexOutcome } from '../codex';
 import { deriveAccounts, type AccountRecord } from './deriveAccounts';
 import { decryptPhrase, encryptPhrase } from './encryptAtRest';
 import { generateMnemonic, validateMnemonic } from './mnemonic';
@@ -53,10 +56,30 @@ import {
   serializeVault,
   advancedAccountsOf,
   pureKeypairsOf,
+  type SeedType,
   type StoredAccount,
   type StoredWallet,
   type Vault,
 } from './vault';
+
+/** Public per-seed summary the Advanced tab renders (no secret material). */
+export interface WalletSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly seedType: SeedType;
+  readonly isActive: boolean;
+  readonly activeAccountIndex: number;
+  readonly accounts: readonly StoredAccount[];
+}
+
+/** Public summary of a vault pure keypair (no secret material). */
+export interface PureKeypairSummary {
+  readonly id: string;
+  readonly label?: string;
+  readonly publicKey: string;
+  /** The `k:` single-key account the pure key controls. */
+  readonly account: string;
+}
 
 /** Options shared by `createWallet` / `importWallet`. */
 export interface OnboardOptions {
@@ -250,30 +273,173 @@ export class KeyringManager {
    * from the in-memory mnemonic + sealing password — takes no password argument.
    */
   async addAccount(walletId: string): Promise<StoredAccount> {
-    const unlocked = this.requireUnlocked(walletId);
-
     const vault = await this.requireVault();
     const wallet = this.findWallet(vault, walletId);
-
     const nextIndex =
       wallet.accounts.reduce((max, a) => Math.max(max, a.index), -1) + 1;
+    return this.deriveAndAppendAccount(walletId, nextIndex);
+  }
+
+  /**
+   * Derive a SPECIFIC (possibly non-consecutive) account index for an unlocked
+   * wallet, append it, make it active, and persist. The Advanced tab uses this for
+   * "add account at index N"; `addAccount` is the consecutive convenience over it.
+   * Rejects an index already present on the wallet.
+   */
+  async addAccountAtIndex(walletId: string, index: number): Promise<StoredAccount> {
+    if (index < 0 || !Number.isInteger(index)) {
+      throw new Error(`addAccountAtIndex: index must be a non-negative integer, got ${index}.`);
+    }
+    const vault = await this.requireVault();
+    const wallet = this.findWallet(vault, walletId);
+    if (wallet.accounts.some((a) => a.index === index)) {
+      throw new Error(`Account index ${index} already exists on wallet ${walletId}.`);
+    }
+    return this.deriveAndAppendAccount(walletId, index);
+  }
+
+  /**
+   * Derive one account at `index` for `walletId` from its seed (routed by the
+   * wallet's `seedType`), append it, make it active, persist. Requires the wallet
+   * to be the currently-unlocked one (its mnemonic is held in memory) — switching
+   * seeds via `setActiveWallet` re-points the unlocked mnemonic first.
+   */
+  private async deriveAndAppendAccount(
+    walletId: string,
+    index: number,
+  ): Promise<StoredAccount> {
+    const unlocked = this.requireUnlocked(walletId);
+    const vault = await this.requireVault();
+    const wallet = this.findWallet(vault, walletId);
 
     const [record] = await deriveAccounts(
       unlocked.mnemonic,
       unlocked.password,
-      nextIndex,
+      index,
       1,
+      wallet.seedType,
     );
     const account = toStoredAccount(record);
 
     const nextWallet: StoredWallet = {
       ...wallet,
-      accounts: [...wallet.accounts, account],
+      accounts: [...wallet.accounts, account].sort((a, b) => a.index - b.index),
       activeAccountIndex: account.index,
     };
 
     await this.persist(this.replaceWalletInVault(vault, nextWallet));
     return account;
+  }
+
+  /**
+   * Switch the ACTIVE wallet (seed) — used by the Advanced tab's seed switcher.
+   * Re-points the in-memory unlocked state to the target seed by decrypting its
+   * phrase with the held vault password (all seeds share that password), so
+   * subsequent `addAccount`/signing use the right mnemonic without a re-prompt,
+   * and sets `vault.activeWalletId`. Rejects when locked or the wallet is unknown.
+   */
+  async setActiveWallet(walletId: string): Promise<void> {
+    if (this.unlocked === null) {
+      throw new WalletLockedError();
+    }
+    const vault = await this.requireVault();
+    const wallet = this.findWallet(vault, walletId);
+    const password = this.unlocked.password;
+    const mnemonic =
+      walletId === this.unlocked.walletId
+        ? this.unlocked.mnemonic
+        : await decryptPhrase(wallet.encryptedPhrase, password);
+    this.unlocked = { walletId, mnemonic, password };
+    await this.persist({ ...vault, activeWalletId: walletId });
+  }
+
+  /**
+   * IMPORT an Ouronet Codex export into this vault. Requires an unlocked wallet
+   * (the held vault password re-seals every imported secret). Decrypts each
+   * seed's mnemonic + each pure key at the CODEX password via `smartDecrypt`,
+   * re-seals them at the WALLET password (`encryptPhrase` / `smartEncrypt` "2" —
+   * the SAME envelope the koala phrase + pasted pure keys already use, so signing
+   * decrypts them identically), and APPENDS the new seeds/keys (idempotent —
+   * already-present public keys are skipped). The decrypted secrets never leave
+   * this method; only at-rest envelopes are persisted. Returns the discriminated
+   * import outcome (summary on success, secret-free reason on failure).
+   */
+  async importCodex(
+    json: string,
+    codexPassword: string,
+  ): Promise<ImportCodexOutcome> {
+    if (this.unlocked === null) {
+      throw new WalletLockedError();
+    }
+    const password = this.unlocked.password;
+    const vault = await this.requireVault();
+
+    const existingPubKeys = new Set<string>();
+    for (const w of vault.wallets) {
+      for (const acct of w.accounts) existingPubKeys.add(acct.publicKey);
+    }
+    for (const key of pureKeypairsOf(vault)) existingPubKeys.add(key.publicKey);
+
+    // SAME-SEED views so the importer can MERGE a seed we already hold (with more
+    // accounts) instead of duplicating it.
+    const existingWallets = vault.wallets.map((w) => ({
+      id: w.id,
+      name: w.name,
+      accountPubKeys: w.accounts.map((a) => a.publicKey),
+    }));
+
+    const takenWalletIds = new Set(vault.wallets.map((w) => w.id));
+    let walletN = vault.wallets.length;
+    let keyN = 0;
+
+    const outcome = await coreImportCodex(json, {
+      decrypt: (blob) => smartDecrypt(blob, codexPassword),
+      encryptPhrase: (mnemonic) => encryptPhrase(mnemonic, password),
+      encryptPrivateKey: (privateKey) => smartEncrypt(privateKey, password, '2'),
+      existingPubKeys,
+      existingWallets,
+      genId: (kind) => {
+        if (kind === 'wallet') {
+          let id: string;
+          do {
+            walletN += 1;
+            id = `wallet-${walletN}`;
+          } while (takenWalletIds.has(id));
+          takenWalletIds.add(id);
+          return id;
+        }
+        keyN += 1;
+        return `pure-import-${vault.wallets.length}-${keyN}`;
+      },
+      now: () => new Date().toISOString(),
+    });
+
+    if (!outcome.ok) return outcome;
+
+    // Apply same-seed MERGES first: fold each merge's new accounts into the
+    // existing wallet (deduped by index, sorted) and adopt the codex name. Then
+    // append the brand-new seeds + pure keys. The active selection is kept — import
+    // does NOT yank the user onto an imported seed. At-rest envelopes only.
+    const mergeById = new Map(outcome.merges.map((m) => [m.walletId, m]));
+    const mergedWallets = vault.wallets.map((w) => {
+      const merge = mergeById.get(w.id);
+      if (merge === undefined) return w;
+      const byIndex = new Map(w.accounts.map((a) => [a.index, a]));
+      for (const acct of merge.accounts) byIndex.set(acct.index, acct);
+      return {
+        ...w,
+        name: merge.name,
+        accounts: [...byIndex.values()].sort((a, b) => a.index - b.index),
+      };
+    });
+
+    const nextVault: Vault = {
+      ...vault,
+      wallets: [...mergedWallets, ...outcome.wallets],
+      pureKeypairs: [...pureKeypairsOf(vault), ...outcome.pureKeypairs],
+    };
+    await this.persist(nextVault);
+    return outcome;
   }
 
   /**
@@ -292,6 +458,51 @@ export class KeyringManager {
     }
 
     const nextWallet: StoredWallet = { ...wallet, activeAccountIndex: index };
+    await this.persist(this.replaceWalletInVault(vault, nextWallet));
+  }
+
+  /**
+   * Rename a seed (wallet). The name is non-secret vault metadata, so this does
+   * NOT require an unlocked wallet and touches no key material. Rejects an
+   * empty/whitespace-only name. The Advanced tab uses this to relabel seeds
+   * (including codex-imported ones).
+   */
+  async renameWallet(walletId: string, name: string): Promise<void> {
+    const trimmed = name.trim();
+    if (trimmed === '') {
+      throw new Error('Wallet name cannot be empty.');
+    }
+    const vault = await this.requireVault();
+    const wallet = this.findWallet(vault, walletId);
+    const nextWallet: StoredWallet = { ...wallet, name: trimmed };
+    await this.persist(this.replaceWalletInVault(vault, nextWallet));
+  }
+
+  /**
+   * Remove a derived account from a seed. Account index #0 (the seed's primary,
+   * always-present account) CANNOT be removed — it is the seed's anchor. Removing
+   * an account drops only a re-derivable PUBLIC record: no secret is destroyed and
+   * the same index re-derives from the seed later. If the removed account was the
+   * active one, the active selection falls back to #0. Does NOT require an unlocked
+   * wallet (no key material is touched).
+   */
+  async removeAccount(walletId: string, index: number): Promise<void> {
+    if (index === 0) {
+      throw new Error('Account #0 cannot be removed.');
+    }
+    const vault = await this.requireVault();
+    const wallet = this.findWallet(vault, walletId);
+    if (!wallet.accounts.some((a) => a.index === index)) {
+      throw new Error(
+        `Account index ${index} does not exist on wallet ${walletId}.`,
+      );
+    }
+    const nextWallet: StoredWallet = {
+      ...wallet,
+      accounts: wallet.accounts.filter((a) => a.index !== index),
+      activeAccountIndex:
+        wallet.activeAccountIndex === index ? 0 : wallet.activeAccountIndex,
+    };
     await this.persist(this.replaceWalletInVault(vault, nextWallet));
   }
 
@@ -327,6 +538,42 @@ export class KeyringManager {
   }
 
   /**
+   * Public summary of EVERY seed (wallet) in the vault — id, name, seed type, its
+   * accounts, and whether it is the active seed. The Advanced tab's seed switcher
+   * renders this. Carries no secret material (no phrase, no keys). Reads the
+   * in-memory cache, reflecting the latest persisted state.
+   */
+  listWallets(): readonly WalletSummary[] {
+    const vault = this.cachedVault;
+    if (vault === null) return [];
+    return vault.wallets.map((w) => ({
+      id: w.id,
+      name: w.name,
+      seedType: w.seedType,
+      isActive: w.id === vault.activeWalletId,
+      activeAccountIndex: w.activeAccountIndex,
+      accounts: w.accounts,
+    }));
+  }
+
+  /**
+   * Public summary of every vault-global PURE keypair (the raw `-g` keys pasted in
+   * or brought by a Codex import) — id, optional label, public key, and its `k:`
+   * account. Carries NO secret material (never the encrypted/!plain private key).
+   * Reads the in-memory cache. The Advanced tab's Pure Keys section renders this.
+   */
+  listPureKeypairs(): readonly PureKeypairSummary[] {
+    const vault = this.cachedVault;
+    if (vault === null) return [];
+    return pureKeypairsOf(vault).map((k) => ({
+      id: k.id,
+      ...(k.label !== undefined ? { label: k.label } : {}),
+      publicKey: k.publicKey,
+      account: `k:${k.publicKey}`,
+    }));
+  }
+
+  /**
    * Re-derive the active account's SIGN-READY keypair SET from the in-memory
    * unlocked mnemonic + sealing password — NO password re-prompt. Matches the
    * proven derive → decrypt → raw-key signing path (the koala nacl Ed25519
@@ -342,26 +589,60 @@ export class KeyringManager {
     if (this.unlocked === null) {
       throw new WalletLockedError();
     }
-    const active = this.getActiveAccount();
-    if (active === null) {
+    const vault = await this.requireVault();
+    const wallet = vault.wallets.find((w) => w.id === vault.activeWalletId);
+    if (wallet === undefined) {
+      throw new WalletLockedError();
+    }
+    const active = wallet.accounts.find(
+      (a) => a.index === wallet.activeAccountIndex,
+    );
+    if (active === undefined) {
       throw new WalletLockedError();
     }
 
-    const { mnemonic, password } = this.unlocked;
-    const derived = await deriveAccount(mnemonic, password, active.index);
+    const { password } = this.unlocked;
+    // Decrypt the ACTIVE wallet's phrase. Every seed (the onboarded koala AND any
+    // codex-imported one) is sealed at the SAME vault password, so a seed other
+    // than the one unlocked at unlock-time still opens — multi-seed signing works
+    // without a re-prompt. The unlocked seed uses its in-memory mnemonic (fast path).
+    const mnemonic =
+      wallet.id === this.unlocked.walletId
+        ? this.unlocked.mnemonic
+        : await decryptPhrase(wallet.encryptedPhrase, password);
 
-    const rawSecret = await kadenaDecrypt(password, derived.encryptedSecretKey);
-    const secretBytes =
-      rawSecret instanceof Uint8Array
-        ? rawSecret
-        : new Uint8Array(rawSecret as ArrayLike<number>);
-    const privateKey = binToHex(secretBytes);
+    const derived = await deriveAccount(
+      mnemonic,
+      password,
+      active.index,
+      wallet.seedType,
+    );
 
+    if (wallet.seedType === 'koala') {
+      // koala nacl Ed25519: decrypt the at-rest secret back to a raw 32-byte key.
+      const rawSecret = await kadenaDecrypt(password, derived.encryptedSecretKey);
+      const secretBytes =
+        rawSecret instanceof Uint8Array
+          ? rawSecret
+          : new Uint8Array(rawSecret as ArrayLike<number>);
+      return [
+        {
+          publicKey: derived.publicKey,
+          privateKey: binToHex(secretBytes),
+          seedType: 'koala',
+        },
+      ];
+    }
+
+    // chainweaver / eckowallet: do NOT decrypt to a raw key — the WASM signer
+    // drives the BIP32-Ed25519 `EncryptedString` with the wallet password
+    // (`fromKeypair` routes on the encryptedSecretKey + password shape).
     return [
       {
         publicKey: derived.publicKey,
-        privateKey,
-        seedType: 'koala',
+        encryptedSecretKey: derived.encryptedSecretKey,
+        password,
+        seedType: wallet.seedType,
       },
     ];
   }

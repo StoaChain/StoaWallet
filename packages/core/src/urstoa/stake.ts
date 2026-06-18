@@ -21,8 +21,8 @@ const GAS_PAYER_REJECTION_RE = /\bDALOS\b|gas[\s-]?payer|GAS_PAYER/i;
  * `coin.URV|STAKE` cap params.
  *
  * `amount` is the PRE-FORMATTED decimal string the caller produced via the SDK
- * `formatDecimalForPact` (scale 24). This wrapper passes it through verbatim —
- * it never reformats and never re-implements the pact build.
+ * `formatDecimalForPact` (UrStoa's 3-decimal scale). This wrapper passes it through
+ * verbatim — it never reformats and never re-implements the pact build.
  *
  * `gasStationKey` is the active account's KEYPAIR (re-derived by the caller from
  * the unlocked payload). For this k:-only wallet it IS the user's own

@@ -97,9 +97,12 @@ describe('ImportWalletFlow', () => {
     // The phrase has 24 words so it advances to the password step; the import is
     // what rejects it, with the invalid-words message rather than word-count.
     const password = (await screen.findByLabelText(
-      /password/i,
+      /^password$/i,
     )) as HTMLInputElement;
     fireEvent.change(password, { target: { value: 'pw-correct-horse' } });
+    fireEvent.change(screen.getByLabelText(/confirm password/i), {
+      target: { value: 'pw-correct-horse' },
+    });
     await act(async () => {
       fireEvent.submit(screen.getByTestId('password-form'));
     });
@@ -126,9 +129,12 @@ describe('ImportWalletFlow', () => {
     });
 
     const password = (await screen.findByLabelText(
-      /password/i,
+      /^password$/i,
     )) as HTMLInputElement;
     fireEvent.change(password, { target: { value: 'pw-correct-horse' } });
+    fireEvent.change(screen.getByLabelText(/confirm password/i), {
+      target: { value: 'pw-correct-horse' },
+    });
     await act(async () => {
       fireEvent.submit(screen.getByTestId('password-form'));
     });
@@ -142,6 +148,73 @@ describe('ImportWalletFlow', () => {
       { timeout: 15000 },
     );
     expect(await storage.get('stoawallet:vault')).not.toBeNull();
+  });
+
+  it('renders both a password and a confirm-password field on the password step', async () => {
+    renderFlow();
+
+    fireEvent.change(phraseInput(), { target: { value: KNOWN_GOOD } });
+    await act(async () => {
+      fireEvent.submit(screen.getByTestId('phrase-form'));
+    });
+
+    // The import flow now retypes the password (mirroring create) so a typo in
+    // the encryption password cannot silently lock the user out of their wallet.
+    expect(await screen.findByLabelText(/^password$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
+  });
+
+  it('blocks the import when the two password entries do not match', async () => {
+    const { storage, onImported } = renderFlow();
+
+    fireEvent.change(phraseInput(), { target: { value: KNOWN_GOOD } });
+    await act(async () => {
+      fireEvent.submit(screen.getByTestId('phrase-form'));
+    });
+
+    fireEvent.change(await screen.findByLabelText(/^password$/i), {
+      target: { value: 'pw-correct-horse' },
+    });
+    fireEvent.change(screen.getByLabelText(/confirm password/i), {
+      target: { value: 'different-password' },
+    });
+    await act(async () => {
+      fireEvent.submit(screen.getByTestId('password-form'));
+    });
+
+    // A mismatch is caught locally before any work: the user sees the mismatch
+    // message and importWallet is never invoked, so nothing is persisted.
+    expect(
+      await screen.findByText(/passwords do not match/i),
+    ).toBeInTheDocument();
+    expect(onImported).not.toHaveBeenCalled();
+    expect(await storage.get('stoawallet:vault')).toBeNull();
+  });
+
+  it('disables Import wallet until both password entries are non-empty and matching', async () => {
+    renderFlow();
+
+    fireEvent.change(phraseInput(), { target: { value: KNOWN_GOOD } });
+    await act(async () => {
+      fireEvent.submit(screen.getByTestId('phrase-form'));
+    });
+
+    const submit = await screen.findByRole('button', {
+      name: /import wallet/i,
+    });
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/^password$/i), {
+      target: { value: 'pw-correct-horse' },
+    });
+    // Confirm still empty → the submit stays blocked rather than sealing under a
+    // password the user only typed once.
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/confirm password/i), {
+      target: { value: 'pw-correct-horse' },
+    });
+    expect(submit).toBeEnabled();
   });
 
   it('disables the phrase Continue control until exactly 24 words are present', () => {

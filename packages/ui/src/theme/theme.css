@@ -16,4 +16,38 @@
   --color-status-danger: #ef4444;
 
   --font-sans: Inter, sans-serif;
+
+  /* Aliases for the shorter `--stoa-*` names a few components reference (the
+   * WalletApp shell). Single source of truth: they map onto the canonical tokens
+   * above so the shell pulls real brand values, not just its inline fallbacks. */
+  --stoa-bg: var(--color-stoa-dark);
+  --stoa-surface: var(--color-stoa-surface);
+  --stoa-text: var(--color-stoa-light);
+  --stoa-muted: var(--color-stoa-slate);
+  --stoa-gold: var(--color-stoa-gold);
+  --stoa-font-sans: var(--font-sans);
+}
+
+/* Base reset + app surface. Shared by BOTH the extension popup and mobile (no
+ * fixed width here — the extension popup sets its own width in popup.css; mobile
+ * is full-viewport). Without this, components that reference the `--color-*`
+ * vars above render unstyled because nothing else loads this stylesheet. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-stoa-dark);
+  color: var(--color-stoa-light);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }

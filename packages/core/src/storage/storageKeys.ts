@@ -44,6 +44,12 @@ export const DAPP_RATELIMIT_KEY = 'stoawallet:dapp:ratelimit';
  */
 export const NODE_PREFERENCE_KEY = 'node.preference';
 
+/** The saved recipient address book — named `k:` addresses (non-secret config). */
+export const ADDRESS_BOOK_KEY = 'stoawallet:address-book';
+
+/** The auto-lock window in minutes — non-secret config (how long until self-lock). */
+export const AUTO_LOCK_KEY = 'stoawallet:auto-lock';
+
 /**
  * Frozen map of every registered key. The distinctness invariant is asserted
  * over THIS object so a newly-added constant that is forgotten here is also
@@ -57,6 +63,8 @@ export const STORAGE_KEYS = {
   DAPP_PERMISSIONS_KEY,
   DAPP_RATELIMIT_KEY,
   NODE_PREFERENCE_KEY,
+  ADDRESS_BOOK_KEY,
+  AUTO_LOCK_KEY,
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

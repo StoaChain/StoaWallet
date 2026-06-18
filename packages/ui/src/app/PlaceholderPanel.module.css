@@ -1,0 +1,23 @@
+/* A neutral coming-soon panel for not-yet-built nav destinations. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 16px;
+  text-align: center;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-stoa-light, #f5f5f5);
+}
+
+.message {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-stoa-slate, #9aa6b2);
+}

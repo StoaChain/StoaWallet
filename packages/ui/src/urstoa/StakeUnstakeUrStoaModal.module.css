@@ -1,11 +1,94 @@
-.modal {
+/* The action PAGE content (rendered inside the UrStoa tab's silver sub-view). */
+.page {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding: 1rem;
-  background: var(--color-stoa-dark);
+}
+
+/* Amount field group — the SAME format as the Stoa SendForm: a bordered row with
+ * a ghost input + divider + MAX button. */
+.fieldGroup {
+  display: flex;
+  align-items: center;
+  height: 2.5rem;
+  overflow: hidden;
+  border: 1px solid var(--color-stoa-border);
+  border-radius: 0.5rem;
+  background: var(--color-stoa-surface);
+}
+
+.fieldGroup:focus-within {
+  border-color: var(--color-stoa-gold);
+}
+
+.ghostInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0 0.75rem;
+  background: transparent;
+  border: none;
+  outline: none;
   color: var(--color-stoa-light);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9375rem;
+}
+
+.ghostInput::placeholder {
+  color: var(--color-stoa-slate);
+}
+
+.fieldDivider {
+  flex-shrink: 0;
+  width: 1px;
+  height: 1.25rem;
+  background: var(--color-stoa-border);
+}
+
+.fieldMax {
+  flex-shrink: 0;
+  height: 100%;
+  padding: 0 0.875rem;
+  background: transparent;
+  border: none;
+  color: var(--color-stoa-gold);
   font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.fieldMax:hover:not(:disabled) {
+  background: rgba(199, 205, 212, 0.12);
+}
+
+.fieldMax:disabled {
+  color: var(--color-stoa-slate);
+  cursor: not-allowed;
+}
+
+.balanceRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.balanceLeft {
+  font-size: 0.75rem;
+  color: var(--color-stoa-slate);
+}
+
+.balanceValue {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.8125rem;
+  color: var(--color-stoa-light);
+}
+
+.balanceUnknown {
+  color: var(--color-stoa-slate);
 }
 
 /* Stake / unstake mode toggle — two gold-outline segments, the active one filled. */
@@ -102,13 +185,14 @@
   color: var(--color-stoa-slate);
 }
 
-/* Gasless pill — gold-tinted per DESIGN.md: tinted bg, gold border + text. */
+/* Gasless pill — silver-tinted on UrStoa (the page scope flips the gold var to
+ * silver; the tinted bg is neutralized here to match). */
 .gaslessBadge {
   align-self: flex-start;
   padding: 0.25rem 0.625rem;
   border: 1px solid var(--color-stoa-gold);
   border-radius: 999px;
-  background: #2a2410;
+  background: rgba(199, 205, 212, 0.12);
   color: var(--color-stoa-gold);
   font-size: 0.75rem;
   font-weight: 600;
@@ -188,9 +272,11 @@
   background: rgb(212 175 55 / 0.1);
 }
 
+/* Pending is a STATUS (amber), pinned literally so the page's silver override
+ * doesn't recolor it — it sits on the amber pending panel. */
 .pendingText {
   margin: 0;
-  color: var(--color-stoa-gold);
+  color: #d4af37;
 }
 
 .error {

@@ -6,7 +6,7 @@ import {
   type ContextUrStoaTransferParams,
 } from '../context/WalletContext';
 
-import { formatUrStoaAmount } from './amount';
+import { formatUrStoaAmount, URSTOA_DECIMALS } from './amount';
 
 /**
  * The WalletContext native-transfer seam signature (XP-12). The hook passes PUBLIC
@@ -92,8 +92,8 @@ export interface UseTransferUrStoaResult {
 
 /** A k:-account is the `k:` prefix + exactly 64 hex chars (ED25519 pubkey). */
 const K_ACCOUNT_RE = /^k:[0-9a-fA-F]{64}$/;
-/** Max on-chain UrStoa fractional precision (24-decimal scale, T12.1). */
-const MAX_FRACTION_DIGITS = 24;
+/** Max on-chain UrStoa fractional precision — UrStoa is a 3-decimal token. */
+const MAX_FRACTION_DIGITS = URSTOA_DECIMALS;
 /** A plain non-negative decimal: integer part, optional dot + fraction. */
 const DECIMAL_RE = /^\d+(\.\d+)?$/;
 
@@ -104,8 +104,8 @@ function isArmed(status: TransferState['status']): boolean {
 
 /**
  * Reject an amount that is empty, NaN, ≤ 0, not a plain decimal, or carries more
- * than 24 fractional digits — BEFORE any seam call, so a malformed amount never
- * builds a tx. Mirrors the T12.1 formatter contract for fast-fail UX.
+ * than UrStoa's 3 fractional digits — BEFORE any seam call, so a malformed amount
+ * never builds a tx. Mirrors the T12.1 formatter contract for fast-fail UX.
  */
 function isValidAmount(amount: string): boolean {
   const trimmed = amount.trim();
@@ -118,8 +118,8 @@ function isValidAmount(amount: string): boolean {
 
 /**
  * Compare two well-formed non-negative decimal STRINGS as big integers (no float
- * drift): returns true when `amount > available`. 24-decimal precision is exact —
- * a float compare would mis-rank values near the 24th decimal.
+ * drift): returns true when `amount > available`. String-exact at any precision —
+ * a float compare would mis-rank values near the least-significant decimal.
  */
 function amountExceedsBalance(amount: string, available: string): boolean {
   const norm = (v: string): [string, string] => {
@@ -288,9 +288,9 @@ export function useTransferUrStoa(
       return;
     }
 
-    // T12.1: format the STRING amount to the injection-safe 24-decimal Pact
-    // literal — passed through unchanged (no Number round-trip, RR#4). A throw
-    // here is a malformed amount the preview already screened, mapped to error.
+    // T12.1: format the STRING amount to the injection-safe 3-decimal Pact literal
+    // (UrStoa's on-chain scale) — no Number round-trip (RR#4). A throw here is a
+    // malformed amount the preview already screened, mapped to error.
     let formatted: string;
     try {
       formatted = formatUrStoaAmount(current.amount);

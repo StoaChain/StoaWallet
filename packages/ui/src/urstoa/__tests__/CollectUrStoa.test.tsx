@@ -120,19 +120,19 @@ describe('CollectUrStoa', () => {
     expect(screen.getByTestId('collect-stage')).toBeInTheDocument();
   });
 
-  it('shows the request key on success', () => {
+  it('on a SUBMITTED success, returns to overview (onClose) and shows NO inline rectangle', () => {
+    // The submitted outcome is handed to the floating tx toast; the page closes.
     hookSpy.mockReturnValue(
       stubHook({
         canCollect: true,
         state: { status: 'success', requestKey: 'reqkey-123' },
       }),
     );
-    render(<CollectUrStoa earnings={{ decimal: '5.0' }} />);
+    const onClose = vi.fn();
+    render(<CollectUrStoa earnings={{ decimal: '5.0' }} onClose={onClose} />);
 
-    const success = screen.getByTestId('collect-success');
-    // The request key proves the submit reached the network — the collected
-    // earnings move to the coin balance on the hook-driven holdings refresh.
-    expect(success).toHaveTextContent('reqkey-123');
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('collect-success')).not.toBeInTheDocument();
   });
 
   it('routes a locked error to the unlock affordance, never a false success', () => {
@@ -165,12 +165,13 @@ describe('CollectUrStoa', () => {
     expect(screen.queryByTestId('collect-success')).not.toBeInTheDocument();
   });
 
-  it('shows the pending request key without a false success', () => {
+  it('on a PENDING outcome, also returns to overview (the toast carries the unknown state)', () => {
     hookSpy.mockReturnValue(stubHook({ state: { status: 'pending' } }));
-    render(<CollectUrStoa earnings={{ decimal: '5.0' }} />);
+    const onClose = vi.fn();
+    render(<CollectUrStoa earnings={{ decimal: '5.0' }} onClose={onClose} />);
 
-    expect(screen.getByTestId('collect-pending')).toBeInTheDocument();
-    expect(screen.queryByTestId('collect-success')).not.toBeInTheDocument();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('collect-pending')).not.toBeInTheDocument();
   });
 
   it('forwards the earnings prop verbatim to the hook so the hook owns the gate', () => {
@@ -181,5 +182,17 @@ describe('CollectUrStoa', () => {
     // The view must NOT re-implement the gate; it forwards the raw envelope and the
     // caller options to the hook, which unwraps + compares >0 (RR#7).
     expect(hookSpy).toHaveBeenCalled();
+  });
+
+  it('returns to overview exactly ONCE per submitted collect', () => {
+    hookSpy.mockReturnValue(
+      stubHook({ state: { status: 'success', requestKey: 'rk-1' } as CollectState }),
+    );
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <CollectUrStoa earnings={{ decimal: '5.0' }} onClose={onClose} />,
+    );
+    rerender(<CollectUrStoa earnings={{ decimal: '5.0' }} onClose={onClose} />);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

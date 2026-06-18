@@ -1,4 +1,4 @@
-import { deriveAccount } from '../api/derive';
+import { deriveAccount, type DeriveSeedType } from '../api/derive';
 
 /**
  * A discovered StoaChain account at a single HD index. Carries only public
@@ -15,9 +15,16 @@ export interface AccountRecord {
   readonly derivationPath: string;
 }
 
-/** StoaChain SLIP-10 path for a koala (24-word) account at the given index. */
-function derivationPathFor(index: number): string {
-  return `m'/44'/626'/${index}'`;
+/**
+ * The display derivation path for an account at `index`, by seed scheme. koala
+ * is SLIP-10 (`m'/44'/626'/i'`); chainweaver/eckowallet are the Kadena
+ * BIP32-Ed25519 path. Informational only — the SDK builder owns the real
+ * derivation (keyed by mnemonic+index+seedType).
+ */
+function derivationPathFor(index: number, seedType: DeriveSeedType): string {
+  return seedType === 'koala'
+    ? `m'/44'/626'/${index}'`
+    : `m/44'/626'/${index}'/0/0`;
 }
 
 /**
@@ -41,6 +48,7 @@ export async function deriveAccounts(
   password: string,
   startIndex: number,
   count: number,
+  seedType: DeriveSeedType = 'koala',
 ): Promise<AccountRecord[]> {
   const records: AccountRecord[] = [];
 
@@ -50,13 +58,14 @@ export async function deriveAccounts(
       mnemonic,
       password,
       index,
+      seedType,
     );
 
     records.push({
       index,
       publicKey,
       account,
-      derivationPath: derivationPathFor(index),
+      derivationPath: derivationPathFor(index, seedType),
     });
   }
 

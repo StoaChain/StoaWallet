@@ -53,7 +53,11 @@ async function seedLockedWallet(
 }
 
 function typeInto(label: RegExp, value: string) {
-  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  // Use the form-control role so the reveal toggle's "Show password" aria-label
+  // (added by PasswordInput) never matches the field query.
+  fireEvent.change(screen.getByLabelText(label, { selector: 'input' }), {
+    target: { value },
+  });
 }
 
 describe('UnlockScreen', () => {
@@ -140,7 +144,9 @@ describe('UnlockScreen', () => {
 
     // The password field is always present; the biometric button must NOT be,
     // because the platform reported no biometric capability.
-    expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/password/i, { selector: 'input' }),
+    ).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /unlock/i })).toBeEnabled(),
     );
@@ -177,6 +183,35 @@ describe('UnlockScreen', () => {
     // Tapping it must invoke the platform authenticator's unlock (the same-unlock
     // path), not silently no-op.
     await waitFor(() => expect(unlockSecret).toHaveBeenCalledTimes(1));
+  });
+
+  it('submits the unlock on Enter in the password field (form submit, not just the button)', async () => {
+    const { storage, keyVault, wrapper } = makeWrapper();
+    await seedLockedWallet(wrapper);
+
+    render(
+      <WalletProvider storage={storage} keyVault={keyVault}>
+        <UnlockScreen />
+      </WalletProvider>,
+    );
+
+    const input = screen.getByLabelText(/password/i, {
+      selector: 'input',
+    }) as HTMLInputElement;
+    typeInto(/password/i, 'totally wrong');
+
+    // Pressing Enter inside the field must trigger the SAME unlock action the
+    // button does — i.e. the field+button live in a <form> whose submit runs the
+    // unlock. A wrong password proves the unlock ran (it surfaces the distinct
+    // wrong-password message), so Enter is wired, not a no-op.
+    const form = input.closest('form');
+    expect(form, 'the password field must live inside a <form> for Enter to submit').not.toBeNull();
+    fireEvent.submit(form!);
+
+    await waitFor(
+      () => expect(screen.getByText(/wrong password/i)).toBeInTheDocument(),
+      { timeout: 15000 },
+    );
   });
 
   it('never echoes the typed password into console output', async () => {

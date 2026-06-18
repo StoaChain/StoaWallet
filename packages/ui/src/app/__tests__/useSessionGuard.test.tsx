@@ -102,6 +102,37 @@ function makeFakeVault(initialUnlocked: boolean): RemoteVault & {
         ? { ok: true as const, requestKey: 'rk' }
         : { ok: false as const, reason: 'locked' };
     },
+    async getSession() {
+      return {
+        unlocked,
+        expiresAt: unlocked ? 9_999_999_999_999 : null,
+        autoLockMinutes: 5,
+      };
+    },
+    async setAutoLock(minutes: number) {
+      return minutes;
+    },
+    async listWallets() {
+      return [];
+    },
+    async listPureKeypairs() {
+      return [];
+    },
+    async setActiveWallet() {
+      return { ok: true as const };
+    },
+    async addAccountAtIndex() {
+      return { ok: true as const };
+    },
+    async removeAccount() {
+      return { ok: true as const };
+    },
+    async renameWallet() {
+      return { ok: true as const };
+    },
+    async importCodex() {
+      return { ok: true as const, summary: { seedsImported: 0, accountsImported: 0, keysImported: 0, skipped: 0 } };
+    },
   };
 }
 

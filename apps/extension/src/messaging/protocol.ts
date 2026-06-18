@@ -137,6 +137,17 @@ export type Request =
   | { readonly type: 'setActiveAccount'; readonly walletId: string; readonly index: number }
   | { readonly type: 'getActiveAccount' }
   | { readonly type: 'listAccounts' }
+  // Auto-lock session: a READ-ONLY status query (no re-arm) and the duration setter.
+  | { readonly type: 'getSession' }
+  | { readonly type: 'setAutoLock'; readonly minutes: number }
+  // Advanced / Codex (multi-seed) management.
+  | { readonly type: 'listWallets' }
+  | { readonly type: 'listPureKeypairs' }
+  | { readonly type: 'setActiveWallet'; readonly walletId: string }
+  | { readonly type: 'addAccountAtIndex'; readonly walletId: string; readonly index: number }
+  | { readonly type: 'removeAccount'; readonly walletId: string; readonly index: number }
+  | { readonly type: 'renameWallet'; readonly walletId: string; readonly name: string }
+  | { readonly type: 'importCodex'; readonly json: string; readonly codexPassword: string }
   | SignTxRequest
   | UrStoaOpRequest;
 
@@ -189,6 +200,21 @@ export type IsUnlockedResponse = { readonly ok: true; readonly unlocked: boolean
 /** lock / unlock / setActiveAccount succeed with an empty success payload. */
 export type AckResponse = { readonly ok: true };
 
+/**
+ * getSession success: the live auto-lock snapshot the popup renders a countdown
+ * from — whether unlocked, the epoch-ms auto-lock instant (null when locked), and
+ * the configured window in minutes. A pure status query; carries no secret.
+ */
+export type SessionResponse = {
+  readonly ok: true;
+  readonly unlocked: boolean;
+  readonly expiresAt: number | null;
+  readonly autoLockMinutes: number;
+};
+
+/** setAutoLock success: the clamped minutes the wallet now uses. */
+export type SetAutoLockResponse = { readonly ok: true; readonly autoLockMinutes: number };
+
 /** getActiveAccount success: the active account, or null when none is selected. */
 export type GetActiveAccountResponse =
   | { readonly ok: true; readonly account: WireAccount | null }
@@ -203,6 +229,60 @@ export type AddAccountResponse =
 export type ListAccountsResponse =
   | { readonly ok: true; readonly accounts: readonly WireAccount[] }
   | Failure;
+
+/** A public per-seed summary across the wire (no secret material). */
+export interface WireWalletSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly seedType: string;
+  readonly isActive: boolean;
+  readonly activeAccountIndex: number;
+  readonly accounts: readonly WireAccount[];
+}
+
+/** listWallets success: every seed (wallet) in the vault, public fields only. */
+export type ListWalletsResponse =
+  | { readonly ok: true; readonly wallets: readonly WireWalletSummary[] }
+  | Failure;
+
+/** A public pure-keypair summary across the wire (no secret material). */
+export interface WirePureKeypair {
+  readonly id: string;
+  readonly label?: string;
+  readonly publicKey: string;
+  readonly account: string;
+}
+
+/** listPureKeypairs success: every vault pure key, public fields only. */
+export type ListPureKeypairsResponse =
+  | { readonly ok: true; readonly keys: readonly WirePureKeypair[] }
+  | Failure;
+
+/**
+ * importCodex RESULT: the discriminated outcome of a background Codex import. The
+ * success arm carries ONLY the counts (no seed/key material crosses back — the
+ * secrets were decrypted + re-sealed entirely in the worker). The failure arm
+ * carries the core reason plus a local `locked`. Secret-free.
+ */
+export type ImportCodexResponse =
+  | {
+      readonly ok: true;
+      readonly summary: {
+        readonly seedsImported: number;
+        readonly accountsImported: number;
+        readonly keysImported: number;
+        readonly skipped: number;
+      };
+    }
+  | {
+      readonly ok: false;
+      readonly reason:
+        | 'invalid-json'
+        | 'unsupported-version'
+        | 'wrong-codex-password'
+        | 'no-importable-content'
+        | 'locked';
+    };
 
 /**
  * signTx success carries ONLY the signed transaction (a public artifact) — never
@@ -247,9 +327,14 @@ export type UrStoaOpResponse =
 export type Response =
   | IsUnlockedResponse
   | AckResponse
+  | SessionResponse
+  | SetAutoLockResponse
   | GetActiveAccountResponse
   | AddAccountResponse
   | ListAccountsResponse
+  | ListWalletsResponse
+  | ListPureKeypairsResponse
+  | ImportCodexResponse
   | SignTxResponse
   | UrStoaOpResponse;
 
@@ -258,7 +343,23 @@ export type ResponseFor<T extends RequestType> = T extends 'isUnlocked'
   ? IsUnlockedResponse
   : T extends 'unlock' | 'lock' | 'setActiveAccount'
     ? AckResponse | Failure
-    : T extends 'getActiveAccount'
+    : T extends 'getSession'
+      ? SessionResponse
+      : T extends 'setAutoLock'
+        ? SetAutoLockResponse
+        : T extends 'listWallets'
+          ? ListWalletsResponse
+          : T extends 'listPureKeypairs'
+          ? ListPureKeypairsResponse
+          : T extends 'setActiveWallet'
+            ? AckResponse | Failure
+            : T extends 'addAccountAtIndex'
+              ? AddAccountResponse
+              : T extends 'removeAccount' | 'renameWallet'
+                ? AckResponse | Failure
+                : T extends 'importCodex'
+                  ? ImportCodexResponse
+                  : T extends 'getActiveAccount'
       ? GetActiveAccountResponse
       : T extends 'addAccount'
         ? AddAccountResponse

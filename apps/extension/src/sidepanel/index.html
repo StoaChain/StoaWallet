@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Wallet-class CSP for the side-panel surface. The Chrome side panel is a
+      docked extension page (NOT framed by a web page), so it does not need the
+      approval page's `frame-ancestors 'none'` clickjacking guard. Locked-down:
+      only same-origin ('self') scripts/resources, no inline/eval/remote code,
+      no <base> hijack.
+
+      `connect-src 'self' https:` is REQUIRED: the side panel is a full wallet
+      surface doing live RPC (balances, reads, submits) to the StoaChain node —
+      node1/node2 AND any user-set custom https node (Settings). Without it,
+      `default-src 'self'` blocks every node fetch. All wallet code is same-origin
+      (script-src 'self', no remote/eval), so there is no vector to abuse the
+      open https connect.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; object-src 'self'; connect-src 'self' https:; base-uri 'none'"
+    />
+    <title>StoaWallet</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/sidepanel/index.tsx"></script>
+  </body>
+</html>

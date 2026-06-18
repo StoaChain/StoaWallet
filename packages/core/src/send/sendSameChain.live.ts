@@ -31,6 +31,60 @@ const STOA_NETWORK_ID = 'stoa';
 const TX_TTL_SECONDS = 600;
 const SIMULATE_GAS_LIMIT = 500_000;
 
+/** A capability parsed from its Pact-code line into a structured name + args. */
+interface ParsedCapability {
+  readonly name: string;
+  readonly args: readonly unknown[];
+}
+
+/**
+ * Parse a single Pact-code capability line into the structured `{ name, args }`
+ * the `@kadena/client` `withCapability(name, ...args)` builder expects — a
+ * VERBATIM port of OuronetUI's `parseCapabilityLine` (the working reference).
+ *
+ * This is the fix for the same-chain submit failure: previously the live seam
+ * passed the WHOLE Pact-code string (e.g. `(coin.TRANSFER "a" "b" 0.25)`) as the
+ * capability NAME with no args, producing a malformed, un-granted capability.
+ * `dirtyRead` ignores signatures/caps so simulation still passed, but `submit`
+ * rejected because the real `coin.TRANSFER` / `DALOS.GAS_PAYER` caps were never
+ * actually authorized. Parsing the line into name + typed args fixes it.
+ *
+ * Arg typing mirrors the reference: a quoted token → string; all-digits → a Pact
+ * integer `{ int }`; a decimal token → a Pact decimal `{ decimal }`; anything
+ * else → a raw string.
+ */
+function parseCapabilityLine(line: string): ParsedCapability | null {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+
+  if (trimmed.startsWith('(') && trimmed.endsWith(')')) {
+    const inner = trimmed.slice(1, -1);
+    const spaceIndex = inner.indexOf(' ');
+    if (spaceIndex === -1) {
+      return { name: inner, args: [] };
+    }
+
+    const name = inner.slice(0, spaceIndex);
+    const argsString = inner.slice(spaceIndex + 1);
+    const argMatches = argsString.match(/("([^"\\]|\\.)*"|[^\s]+)/g) ?? [];
+
+    const args = argMatches.map((arg) => {
+      if (arg.startsWith('"') && arg.endsWith('"')) return arg.slice(1, -1);
+      if (/^\d+$/.test(arg)) return { int: parseInt(arg, 10) };
+      if (/^\d*\.\d+$/.test(arg)) return { decimal: arg };
+      return arg;
+    });
+
+    return { name, args };
+  }
+
+  // Bare `module.CAP` (must contain a dot to be a valid qualified name).
+  if (trimmed.includes('.')) return { name: trimmed, args: [] };
+  return null;
+}
+
+export { parseCapabilityLine };
+
 /**
  * Build the production deps: a node-active client for the SELECTED chain plus
  * the SDK gas/sign helpers. Each leg resolves the active pact URL for the chain
@@ -74,10 +128,20 @@ export function makeLiveSameChainDeps(): SameChainDeps {
         builder.addData(key, value as never);
       }
 
-      // Sender's own key signs BOTH the GAS_PAYER cap (Pact-code string form)
-      // and the coin.TRANSFER cap.
-      builder.addSigner(spec.signerPublicKey, ((withCapability: (raw: string) => unknown) =>
-        spec.caps.map((cap) => withCapability(cap))) as never);
+      // Sender's own key signs BOTH the GAS_PAYER cap and the coin.TRANSFER cap.
+      // Each cap line is PARSED into name + typed args (mirroring OuronetUI's
+      // working reference) — passing the raw Pact-code string as the cap name
+      // produces an un-granted capability that fails at submit.
+      builder.addSigner(
+        spec.signerPublicKey,
+        ((withCapability: (name: string, ...args: unknown[]) => unknown) =>
+          spec.caps
+            .map((cap) => parseCapabilityLine(cap))
+            .filter((parsed): parsed is ParsedCapability => parsed !== null)
+            .map((parsed) =>
+              withCapability(parsed.name, ...parsed.args),
+            )) as never,
+      );
 
       return builder.createTransaction() as unknown as BuiltTx;
     },

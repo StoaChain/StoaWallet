@@ -175,14 +175,19 @@ describe('StakeUnstakeUrStoaModal — staged progress + double-submit', () => {
 });
 
 describe('StakeUnstakeUrStoaModal — result panel', () => {
-  it('shows the request key on success', () => {
+  it('on a SUBMITTED success, returns to overview (onClose) and shows NO inline rectangle', () => {
+    // The submitted outcome is now handed to the floating tx toast; the page
+    // closes back to the overview instead of rendering a static success panel.
     mockState = { status: 'success', requestKey: 'rk-stake-9' };
+    const onClose = vi.fn();
     render(
       <StakeUnstakeUrStoaModal
         holdings={{ walletBalance: '100', userStaked: '10', vaultTotal: '50' }}
+        onClose={onClose}
       />,
     );
-    expect(screen.getByTestId('stake-success')).toHaveTextContent('rk-stake-9');
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('stake-success')).not.toBeInTheDocument();
   });
 
   it('shows a distinct error reason and does NOT render a false success', () => {
@@ -212,14 +217,48 @@ describe('StakeUnstakeUrStoaModal — result panel', () => {
     expect(onRequireUnlock).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the request key on a pending outcome — never a false success', () => {
+  it('on a PENDING outcome, also returns to overview (the toast carries the unknown state)', () => {
     mockState = { status: 'pending', requestKey: 'rk-maybe-7' };
+    const onClose = vi.fn();
+    render(
+      <StakeUnstakeUrStoaModal
+        holdings={{ walletBalance: '100', userStaked: '10', vaultTotal: '50' }}
+        onClose={onClose}
+      />,
+    );
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('stake-pending')).not.toBeInTheDocument();
+  });
+
+  it('STAKE mode shows the wallet balance; UNSTAKE mode shows the vault stake', () => {
     render(
       <StakeUnstakeUrStoaModal
         holdings={{ walletBalance: '100', userStaked: '10', vaultTotal: '50' }}
       />,
     );
-    expect(screen.getByTestId('stake-pending')).toHaveTextContent('rk-maybe-7');
-    expect(screen.queryByTestId('stake-success')).not.toBeInTheDocument();
+    // Stake is the default — the balance row labels the WALLET balance.
+    expect(screen.getByTestId('stake-balance')).toHaveTextContent(/Wallet balance/i);
+    // Switching to unstake flips it to the user's VAULT stake.
+    fireEvent.click(screen.getByTestId('stake-mode-unstake'));
+    expect(screen.getByTestId('stake-balance')).toHaveTextContent(/Vault \(staked\)/i);
+  });
+
+  it('fires the return-to-overview exactly ONCE per submitted request key', () => {
+    mockState = { status: 'success', requestKey: 'rk-dedupe' };
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <StakeUnstakeUrStoaModal
+        holdings={{ walletBalance: '100', userStaked: '10', vaultTotal: '50' }}
+        onClose={onClose}
+      />,
+    );
+    // A re-render at the same success state must NOT re-fire the close (deduped).
+    rerender(
+      <StakeUnstakeUrStoaModal
+        holdings={{ walletBalance: '100', userStaked: '10', vaultTotal: '50' }}
+        onClose={onClose}
+      />,
+    );
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

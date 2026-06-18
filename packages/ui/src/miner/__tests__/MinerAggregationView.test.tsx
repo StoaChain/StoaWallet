@@ -47,12 +47,19 @@ function stubHook(
 
 /** A funded idle source card with sane defaults. */
 function source(over: Partial<ChainEntry> = {}): ChainEntry {
+  const amount = over.amount ?? '10.000000000000';
   return {
     chainId: '1',
-    amount: '10.000000000000',
     progress: 'idle',
+    amount,
+    max: over.max ?? amount,
     ...over,
   };
+}
+
+/** Open the advanced per-chain detail view (the cards are hidden in the simple view). */
+function openDetails(): void {
+  fireEvent.click(screen.getByTestId('miner-toggle-details'));
 }
 
 afterEach(() => {
@@ -92,6 +99,8 @@ describe('MinerAggregationView', () => {
     });
     expect(setTargetChain).toHaveBeenCalledWith('3');
 
+    // The per-chain cards live in the advanced detail view.
+    openDetails();
     // The target (chain 0) is not rendered as a swept source card.
     expect(screen.queryByTestId('miner-source-0')).toBeNull();
     expect(screen.getByTestId('miner-source-1')).toBeInTheDocument();
@@ -108,6 +117,7 @@ describe('MinerAggregationView', () => {
       }),
     );
     render(<MinerAggregationView />);
+    openDetails();
 
     const card1 = screen.getByTestId('miner-source-1');
     expect(within(card1).getByText(/Chain 1/)).toBeInTheDocument();
@@ -132,6 +142,7 @@ describe('MinerAggregationView', () => {
       }),
     );
     render(<MinerAggregationView />);
+    openDetails();
 
     fireEvent.click(
       within(screen.getByTestId('miner-source-1')).getByTestId('miner-max-1'),
@@ -145,11 +156,50 @@ describe('MinerAggregationView', () => {
       stubHook({ setAmount, sources: [source({ chainId: '1' })] }),
     );
     render(<MinerAggregationView />);
+    openDetails();
 
     fireEvent.change(screen.getByTestId('miner-amount-1'), {
       target: { value: '1.234567890123' },
     });
     expect(setAmount).toHaveBeenCalledWith('1', '1.234567890123');
+  });
+
+  it('SIMPLE view by default: a summary of the total + chain count + target, no per-chain cards', () => {
+    hookSpy.mockReturnValue(
+      stubHook({
+        targetChain: '0',
+        sources: [
+          source({ chainId: '1', amount: '10.000000000000' }),
+          source({ chainId: '2', amount: '5.000000000000' }),
+        ],
+      }),
+    );
+    render(<MinerAggregationView />);
+
+    const summary = screen.getByTestId('miner-summary');
+    expect(summary).toHaveTextContent('15.000000000000'); // total across 2 chains
+    expect(summary).toHaveTextContent(/into Chain 0/);
+    expect(screen.getByTestId('miner-source-count')).toHaveTextContent('2');
+    // The per-chain cards are hidden until the advanced view is opened.
+    expect(screen.queryByTestId('miner-source-1')).toBeNull();
+    openDetails();
+    expect(screen.getByTestId('miner-source-1')).toBeInTheDocument();
+  });
+
+  it('disables Aggregate (and flags the input) when a custom amount exceeds its chain balance', () => {
+    hookSpy.mockReturnValue(
+      stubHook({
+        sources: [
+          // amount lowered/raised ABOVE the max (full balance) → invalid.
+          source({ chainId: '1', amount: '99.000000000000', max: '10.000000000000' }),
+        ],
+      }),
+    );
+    render(<MinerAggregationView />);
+    openDetails();
+
+    expect(screen.getByTestId('miner-exceed-1')).toBeInTheDocument();
+    expect(screen.getByTestId('miner-aggregate')).toBeDisabled();
   });
 
   it('shows a gasless disclosure naming both gas paths and no per-source gas input', () => {

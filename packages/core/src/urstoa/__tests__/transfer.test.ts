@@ -8,7 +8,7 @@ const SENDER_PUB = 'a'.repeat(64);
 const RECEIVER_PUB = 'b'.repeat(64);
 const SENDER = `k:${SENDER_PUB}`;
 const RECEIVER = `k:${RECEIVER_PUB}`;
-const AMOUNT = '12.500000000000000000000000'; // already SDK-formatted, scale 24
+const AMOUNT = '12.500'; // already SDK-formatted at UrStoa's 3-decimal scale
 
 const paymentKeypair = { publicKey: SENDER_PUB, secretKey: 's'.repeat(64) };
 

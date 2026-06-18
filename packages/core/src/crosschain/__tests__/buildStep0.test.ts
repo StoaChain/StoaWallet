@@ -141,12 +141,14 @@ describe('buildCrossChainStep0 — receiver validation (Phase-4 pattern)', () =>
     expect(res).toEqual({ ok: false, reason: 'invalid-recipient' });
   });
 
-  it('refuses a self-send (receiver === sender)', async () => {
+  it('ALLOWS a self-send (receiver === sender) — your own account on a different chain', async () => {
+    // Moving your own funds across chains is the canonical cross-chain transfer;
+    // since source ≠ target is already enforced, receiver === sender is valid.
     const res = await buildCrossChainStep0(
       baseInput({ receiver: SENDER }),
       absentReceiver,
     );
-    expect(res).toEqual({ ok: false, reason: 'invalid-recipient' });
+    expect(res.ok).toBe(true);
   });
 });
 

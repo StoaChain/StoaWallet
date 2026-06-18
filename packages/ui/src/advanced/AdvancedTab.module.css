@@ -1,0 +1,480 @@
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-family: var(--font-sans);
+  color: var(--color-stoa-light, #f5f5f5);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.heading {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--color-stoa-gold, #d4af37);
+}
+
+.modeSwitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--color-stoa-slate, #9aa6b2);
+  cursor: pointer;
+}
+
+.notice {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  border-radius: 8px;
+  background: var(--color-stoa-surface, #1a1a1a);
+  font-size: 0.8125rem;
+  color: var(--color-stoa-light, #f5f5f5);
+}
+
+.empty,
+.help {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-stoa-slate, #9aa6b2);
+}
+
+.advancedBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* One seed card. */
+.seedCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  border-radius: 12px;
+  background: var(--color-stoa-surface, #1a1a1a);
+}
+
+.seedHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.seedName {
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.seedChip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.activeBadge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--color-status-success, #4ade80);
+  border: 1px solid var(--color-status-success, #4ade80);
+}
+
+.useSeed {
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--color-stoa-gold, #d4af37);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-stoa-gold, #d4af37);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.useSeed:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.accountList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.accountRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  border-radius: 8px;
+  background: var(--color-stoa-dark, #0a0a0a);
+  color: var(--color-stoa-light, #f5f5f5);
+  cursor: pointer;
+  text-align: left;
+}
+
+.accountRow:hover:not(:disabled) {
+  border-color: var(--color-stoa-gold, #d4af37);
+}
+
+.accountRow:disabled {
+  cursor: default;
+}
+
+/* Tier 1 — the account SELECTED within this seed (gold; every seed has one). */
+.accountSelected {
+  border-color: var(--color-stoa-gold, #d4af37);
+  background: rgba(212, 175, 55, 0.12);
+}
+
+/* Tier 2 — the account actually IN SERVICE for operations (the active seed's
+ * selected account). Orange so it's unmistakably distinct from a seed's local
+ * gold selection — at most ONE account is orange across the whole wallet. */
+.accountInService {
+  border-color: #f97316;
+  background: rgba(249, 115, 22, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.45);
+}
+
+.accountInService:hover:not(:disabled) {
+  border-color: #f97316;
+}
+
+.accountIndex {
+  flex-shrink: 0;
+  color: var(--color-stoa-gold, #d4af37);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.accountAddr {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+}
+
+.accountActiveTick {
+  flex-shrink: 0;
+  color: var(--color-stoa-gold, #d4af37);
+}
+
+/* The orange "in service" tag on the operational account. */
+.accountServiceTag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(249, 115, 22, 0.18);
+  color: #f97316;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* An account row + its remove control sit side by side. */
+.accountItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.accountItem .accountRow {
+  flex: 1;
+  min-width: 0;
+}
+
+.removeAccount {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-stoa-slate, #9aa6b2);
+  font-size: 0.8125rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.removeAccount:hover:not(:disabled) {
+  color: var(--color-status-danger, #ef4444);
+  border-color: var(--color-status-danger, #ef4444);
+}
+
+.removeAccount:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Seed rename control. */
+.renameButton {
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-stoa-slate, #9aa6b2);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.renameButton:hover:not(:disabled) {
+  color: var(--color-stoa-gold, #d4af37);
+  border-color: var(--color-stoa-gold, #d4af37);
+}
+
+.renameButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.renameRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.renameInput {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--color-stoa-gold, #d4af37);
+  border-radius: 8px;
+  background: var(--color-stoa-dark, #0a0a0a);
+  color: var(--color-stoa-light, #f5f5f5);
+  font-size: 0.875rem;
+}
+
+.renameInput:focus {
+  outline: none;
+}
+
+.renameSave,
+.renameCancel {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.renameSave {
+  border: 1px solid var(--color-stoa-gold, #d4af37);
+  background: var(--color-stoa-gold, #d4af37);
+  color: #0a0a0a;
+}
+
+.renameCancel {
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  background: transparent;
+  color: var(--color-stoa-slate, #9aa6b2);
+}
+
+.renameSave:disabled,
+.renameCancel:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.addRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.addButton {
+  align-self: flex-start;
+  padding: 5px 12px;
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-stoa-slate, #9aa6b2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.addButton:hover:not(:disabled) {
+  color: var(--color-stoa-gold, #d4af37);
+  border-color: var(--color-stoa-gold, #d4af37);
+}
+
+.addButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.atIndexRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.indexInput {
+  width: 5.5rem;
+  padding: 5px 8px;
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  border-radius: 8px;
+  background: var(--color-stoa-dark, #0a0a0a);
+  color: var(--color-stoa-light, #f5f5f5);
+  font-size: 0.8125rem;
+}
+
+.indexInput:focus {
+  outline: none;
+  border-color: var(--color-stoa-gold, #d4af37);
+}
+
+/* Pure keys panel. */
+.pureKeysPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  border-radius: 12px;
+  background: var(--color-stoa-surface, #1a1a1a);
+}
+
+.pureKeysHeading {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-stoa-light, #f5f5f5);
+}
+
+.pureKeysHelp {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-stoa-slate, #9aa6b2);
+}
+
+.pureKeyList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pureKeyRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  border-radius: 8px;
+  background: var(--color-stoa-dark, #0a0a0a);
+}
+
+.pureKeyLabel {
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-stoa-gold, #d4af37);
+}
+
+.pureKeyAddr {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  color: var(--color-stoa-light, #f5f5f5);
+}
+
+/* Codex import panel. */
+.importPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--color-stoa-gold, #d4af37);
+  border-radius: 12px;
+  background: #2a2410;
+}
+
+.importHeading {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-stoa-gold, #d4af37);
+}
+
+.importHelp {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-stoa-slate, #9aa6b2);
+}
+
+.fileInput {
+  font-size: 0.8125rem;
+  color: var(--color-stoa-light, #f5f5f5);
+}
+
+.fileName {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-stoa-slate, #9aa6b2);
+}
+
+.input {
+  padding: 8px 10px;
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  border-radius: 8px;
+  background: var(--color-stoa-dark, #0a0a0a);
+  color: var(--color-stoa-light, #f5f5f5);
+  font-size: 0.875rem;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-stoa-gold, #d4af37);
+}
+
+.importError {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-status-danger, #ef4444);
+}
+
+.importButton {
+  align-self: flex-start;
+  padding: 7px 16px;
+  border: 1px solid var(--color-stoa-gold, #d4af37);
+  border-radius: 8px;
+  background: var(--color-stoa-gold, #d4af37);
+  color: #0a0a0a;
+  font-weight: 700;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.importButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

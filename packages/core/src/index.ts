@@ -80,12 +80,46 @@ export {
   buildTransferCode,
   formatStoaAmount,
   signerSetForSameChain,
+  awaitSendConfirmation,
   type BuildTransferCodeInput,
   type BuildTransferCodeResult,
   type BuiltTx,
   type SimulateResult,
   type BuildTxSpec,
+  type ConfirmSendDeps,
+  type ConfirmSendResult,
+  type ListenOutcome,
 } from './send';
+
+// The recipient address book — named k: addresses, plain config over storage.
+export {
+  listAddressBook,
+  isInAddressBook,
+  saveAddressBookEntry,
+  removeAddressBookEntry,
+  type AddressBookEntry,
+} from './addressbook';
+
+// The auto-lock window preference (minutes) — plain config over storage.
+export {
+  getAutoLockMinutes,
+  setAutoLockMinutes,
+  clampAutoLockMinutes,
+  AUTO_LOCK_OPTIONS,
+  MIN_AUTO_LOCK_MINUTES,
+  MAX_AUTO_LOCK_MINUTES,
+  DEFAULT_AUTO_LOCK_MINUTES,
+} from './autolock';
+
+// Codex import — map an Ouronet Codex export into the vault (pure, injected crypto).
+export {
+  importCodex,
+  type CodexExport,
+  type ImportCodexDeps,
+  type ImportCodexResult,
+  type ImportCodexOutcome,
+  type ImportCodexFailure,
+} from './codex';
 
 // Node boot path + the persisted node-failover preference layer (default /
 // node2 / custom RPC), read/written over the shared StorageAdapter, plus the

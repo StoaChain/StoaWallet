@@ -1,7 +1,9 @@
-import { type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 import { StoaMark } from './glyph';
 import { unwrapDecimal } from './amount';
+import { useToast } from '../toast/ToastContext';
+import { useTxToast } from '../toast/useTxToast';
 import styles from './CollectUrStoa.module.css';
 import {
   useCollectUrStoa,
@@ -25,6 +27,8 @@ export interface CollectUrStoaProps {
   readonly hookOptions?: Omit<UseCollectUrStoaOptions, 'earnings'>;
   /** Called when a `locked` error should route the user to unlock. */
   readonly onRequireUnlock?: () => void;
+  /** Dismiss the modal (the UrStoa tab owns the open-state and closes it). */
+  readonly onClose?: () => void;
 }
 
 /** Statuses during which the Collect control must be disabled (double-submit). */
@@ -55,6 +59,7 @@ export function CollectUrStoa({
   earnings,
   hookOptions,
   onRequireUnlock,
+  onClose,
 }: CollectUrStoaProps): ReactNode {
   const { state, canCollect, collect } = useCollectUrStoa({
     ...hookOptions,
@@ -65,6 +70,31 @@ export function CollectUrStoa({
   const inFlight = IN_FLIGHT.has(status);
   const isLocked = status === 'error' && state.reason === 'locked';
 
+  // Once SUBMITTED, hand off to the shared floating tx toast + return to overview.
+  const trackTx = useTxToast();
+  const toast = useToast();
+  const refresh = hookOptions?.refresh;
+  const firedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (status !== 'success' && status !== 'pending') return;
+    const requestKey =
+      'requestKey' in state ? (state.requestKey ?? undefined) : undefined;
+    const fireKey = requestKey ?? (status === 'pending' ? 'pending' : null);
+    if (fireKey === null || firedRef.current === fireKey) return;
+    firedRef.current = fireKey;
+    if (requestKey !== undefined) {
+      trackTx({ requestKey, chainId: '0', label: 'Collect', onConfirmed: refresh });
+    } else {
+      toast.show({
+        status: 'info',
+        title: 'Collect submitted',
+        detail: 'Confirmation unknown — check the explorer.',
+        autoDismissMs: 9000,
+      });
+    }
+    onClose?.();
+  }, [status, state, trackTx, toast, refresh, onClose]);
+
   // The displayed figure is the SAME `{decimal}`-unwrap the gate uses (never the
   // "[object Object]" String() of the raw envelope). The hook still owns the
   // enable/disable decision via `canCollect`.
@@ -72,7 +102,7 @@ export function CollectUrStoa({
 
   if (isLocked) {
     return (
-      <section className={styles.panel} data-testid="collect-locked">
+      <section className={styles.page} data-testid="collect-locked">
         <p className={styles.lockedText}>
           Your wallet is locked — unlock it to collect.
         </p>
@@ -89,7 +119,7 @@ export function CollectUrStoa({
   }
 
   return (
-    <section className={styles.panel} data-testid="collect-urstoa">
+    <section className={styles.page} data-testid="collect-urstoa">
       <div className={styles.earningsRow}>
         <span className={styles.earningsLabel}>Claimable earnings</span>
         <span className={styles.earningsValue} data-testid="collect-earnings">
@@ -118,28 +148,8 @@ export function CollectUrStoa({
         </div>
       )}
 
-      {status === 'success' && (
-        <div className={styles.success} data-testid="collect-success">
-          <p className={styles.successText}>Earnings collected.</p>
-          <p className={styles.requestKey}>
-            Request key: <span className={styles.mono}>{state.requestKey}</span>
-          </p>
-        </div>
-      )}
-
-      {status === 'pending' && (
-        <div
-          className={styles.pending}
-          role="status"
-          data-testid="collect-pending"
-        >
-          <p className={styles.pendingText}>
-            Submitted — confirmation unknown. The collect may have reached the
-            network; check the explorer before retrying to avoid collecting
-            twice.
-          </p>
-        </div>
-      )}
+      {/* Submitted/pending outcomes are handed to the floating tx toast (which
+          confirms on-chain + auto-dismisses); the page returns to the overview. */}
 
       {status === 'error' && state.reason !== 'locked' && (
         <div className={styles.error} role="alert" data-testid="collect-error">

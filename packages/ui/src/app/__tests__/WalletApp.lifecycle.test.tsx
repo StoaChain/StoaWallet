@@ -82,6 +82,37 @@ function makeFakeVault(initialUnlocked: boolean): RemoteVault & {
         ? { ok: true as const, requestKey: 'rk' }
         : { ok: false as const, reason: 'locked' };
     },
+    async getSession() {
+      return {
+        unlocked,
+        expiresAt: unlocked ? 9_999_999_999_999 : null,
+        autoLockMinutes: 5,
+      };
+    },
+    async setAutoLock(minutes: number) {
+      return minutes;
+    },
+    async listWallets() {
+      return [];
+    },
+    async listPureKeypairs() {
+      return [];
+    },
+    async setActiveWallet() {
+      return { ok: true as const };
+    },
+    async addAccountAtIndex() {
+      return { ok: true as const };
+    },
+    async removeAccount() {
+      return { ok: true as const };
+    },
+    async renameWallet() {
+      return { ok: true as const };
+    },
+    async importCodex() {
+      return { ok: true as const, summary: { seedsImported: 0, accountsImported: 0, keysImported: 0, skipped: 0 } };
+    },
   };
 }
 
@@ -139,7 +170,7 @@ describe('WalletApp — MV3 SW-lifecycle resilience', () => {
     expect(
       await screen.findByRole('heading', { name: /unlock wallet/i }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /receive/i })).toBeNull();
+    expect(screen.queryByTestId('stoa-tab')).toBeNull();
   });
 
   it('renders the wallet HOME directly when the background reports unlocked on popup open', async () => {
@@ -154,7 +185,7 @@ describe('WalletApp — MV3 SW-lifecycle resilience', () => {
     });
 
     expect(
-      await screen.findByRole('tab', { name: /receive/i }),
+      await screen.findByRole('tab', { name: /^stoa$/i }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /unlock wallet/i })).toBeNull();
     // First-open unlocked is NOT a session-expired event.
@@ -184,7 +215,7 @@ describe('WalletApp — MV3 SW-lifecycle resilience', () => {
       renderPopup(storage, keyVault, remoteVault);
     });
 
-    await screen.findByRole('tab', { name: /receive/i });
+    await screen.findByRole('tab', { name: /^stoa$/i });
 
     remoteVault.setUnlocked(false);
     await triggerMidSessionExpiry();
@@ -193,6 +224,73 @@ describe('WalletApp — MV3 SW-lifecycle resilience', () => {
       await screen.findByRole('heading', { name: /unlock wallet/i }),
     ).toBeInTheDocument();
     expect(await screen.findByText(/session expired/i)).toBeInTheDocument();
+  });
+
+  it('flips to HOME when the user re-unlocks in-popup after the background reported locked on open', async () => {
+    // The SW was terminated while the popup was closed (background reports
+    // locked → UnlockScreen). The user enters the password and unlocks WITHIN
+    // the same open popup; the background unlock succeeds. The guard must
+    // re-derive the unlocked-state reactively so the popup leaves the
+    // UnlockScreen and shows HOME — it must NOT stay stuck on unlock.
+    const storage = new InMemoryStorageAdapter();
+    const keyVault = new InMemoryKeyVault();
+    await seedLockedWallet(storage, keyVault);
+    const remoteVault = makeFakeVault(false);
+
+    await act(async () => {
+      renderPopup(storage, keyVault, remoteVault);
+    });
+
+    // Background reports locked → UnlockScreen, not HOME.
+    await screen.findByRole('heading', { name: /unlock wallet/i });
+    expect(screen.queryByTestId('stoa-tab')).toBeNull();
+
+    const input = (await screen.findByLabelText(/password/i, {
+      selector: 'input',
+    })) as HTMLInputElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )!.set!;
+      setter.call(input, PASSWORD);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      screen.getByRole('button', { name: /^unlock$/i }).click();
+    });
+
+    // The in-popup unlock succeeded (the stub now reports isUnlocked → true):
+    // the guard must flip to HOME, not stay on the UnlockScreen.
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /^stoa$/i })).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('heading', { name: /unlock wallet/i })).toBeNull();
+  });
+
+  it('returns to the UnlockScreen when Lock is clicked in remote mode', async () => {
+    // A live HOME (background unlocked); clicking Lock locks the background and
+    // the guard must reactively flip back to the UnlockScreen.
+    const storage = new InMemoryStorageAdapter();
+    const keyVault = new InMemoryKeyVault();
+    await seedLockedWallet(storage, keyVault);
+    const remoteVault = makeFakeVault(true);
+
+    await act(async () => {
+      renderPopup(storage, keyVault, remoteVault);
+    });
+    await screen.findByRole('tab', { name: /^stoa$/i });
+
+    await act(async () => {
+      screen.getByRole('button', { name: /^lock$/i }).click();
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { name: /unlock wallet/i }),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId('stoa-tab')).toBeNull();
   });
 
   it('resumes HOME after a re-unlock following a session expiry', async () => {
@@ -207,14 +305,16 @@ describe('WalletApp — MV3 SW-lifecycle resilience', () => {
     await act(async () => {
       renderPopup(storage, keyVault, remoteVault);
     });
-    await screen.findByRole('tab', { name: /receive/i });
+    await screen.findByRole('tab', { name: /^stoa$/i });
 
     remoteVault.setUnlocked(false);
     await triggerMidSessionExpiry();
     await screen.findByText(/session expired/i);
 
     // Re-unlock through the SAME Phase-2 screen.
-    const input = (await screen.findByLabelText(/password/i)) as HTMLInputElement;
+    const input = (await screen.findByLabelText(/password/i, {
+      selector: 'input',
+    })) as HTMLInputElement;
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(
         HTMLInputElement.prototype,
@@ -228,7 +328,7 @@ describe('WalletApp — MV3 SW-lifecycle resilience', () => {
     });
 
     await waitFor(() =>
-      expect(screen.getByRole('tab', { name: /receive/i })).toBeInTheDocument(),
+      expect(screen.getByRole('tab', { name: /^stoa$/i })).toBeInTheDocument(),
     );
     expect(screen.queryByText(/session expired/i)).toBeNull();
   });

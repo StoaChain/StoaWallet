@@ -149,7 +149,7 @@ export function UrStoaCard({
           denomination="UrStoa"
         />
         <HoldingRow
-          label="Vault earnings"
+          label="Claimable (STOA)"
           amount={vaultEarnings}
           testId="urstoa-earnings"
           denomination="STOA"
@@ -157,27 +157,43 @@ export function UrStoaCard({
       </div>
 
       <div className={styles.actions}>
+        <button type="button" className={styles.action} onClick={() => onTransfer?.()}>
+          <span className={styles.actionChip}>
+            <TransferIcon className={styles.actionIcon} />
+          </span>
+          <span className={styles.actionLabel}>Transfer</span>
+        </button>
         <button type="button" className={styles.action} onClick={() => onStake?.()}>
-          Stake
+          <span className={styles.actionChip}>
+            <StakeIcon className={styles.actionIcon} />
+          </span>
+          <span className={styles.actionLabel}>Stake</span>
         </button>
         <button type="button" className={styles.action} onClick={() => onUnstake?.()}>
-          Unstake
+          <span className={styles.actionChip}>
+            <UnstakeIcon className={styles.actionIcon} />
+          </span>
+          <span className={styles.actionLabel}>Unstake</span>
         </button>
         <button type="button" className={styles.action} onClick={() => onCollect?.()}>
-          Collect
-        </button>
-        <button type="button" className={styles.action} onClick={() => onTransfer?.()}>
-          Transfer
-        </button>
-        <button
-          type="button"
-          className={styles.refresh}
-          onClick={() => void refresh()}
-          disabled={isRefreshing}
-        >
-          Refresh
+          <span className={styles.actionChip}>
+            <CollectIcon className={styles.actionIcon} />
+          </span>
+          <span className={styles.actionLabel}>Collect</span>
         </button>
       </div>
+
+      <button
+        type="button"
+        className={styles.refresh}
+        onClick={() => void refresh()}
+        disabled={isRefreshing}
+      >
+        <span className={styles.refreshGlyph} aria-hidden="true">
+          ↻
+        </span>
+        {isRefreshing ? 'Refreshing…' : 'Refresh'}
+      </button>
 
       {isRefreshing && (
         <span className={styles.refreshing} data-testid="urstoa-refreshing" role="status">
@@ -188,13 +204,35 @@ export function UrStoaCard({
   );
 }
 
-/** The card title — the constant UrStoa heading, never derived from balances. */
+/** The card title — the constant UrStoa heading (silver ✦), never derived from balances. */
 function Heading(): ReactNode {
   return (
     <header className={styles.header}>
-      <h2 className={styles.title}>UrStoa</h2>
+      <h2 className={styles.title}>
+        <UrStoaMark className={styles.titleMark} />
+        UrStoa
+      </h2>
     </header>
   );
+}
+
+/**
+ * Clamp/pad a raw decimal STRING to exactly `decimals` fractional digits WITHOUT
+ * a `Number` round-trip (no drift). UrStoa is a 3-decimal token, the STOA-
+ * denominated claimable earnings 12 — so each figure displays at its own
+ * denomination precision. The raw on-chain value is kept verbatim on
+ * `title`/`data-full-value`, so display-clamping never hides funds.
+ */
+function toFixedDecimals(raw: string, decimals: number): string {
+  const trimmed = raw.trim();
+  const negative = trimmed.startsWith('-');
+  const body = negative ? trimmed.slice(1) : trimmed;
+  const dot = body.indexOf('.');
+  const intPart = (dot === -1 ? body : body.slice(0, dot)) || '0';
+  const fracRaw = dot === -1 ? '' : body.slice(dot + 1);
+  const frac = fracRaw.slice(0, decimals).padEnd(decimals, '0');
+  const out = decimals > 0 ? `${intPart}.${frac}` : intPart;
+  return negative ? `-${out}` : out;
 }
 
 interface HoldingRowProps {
@@ -223,6 +261,8 @@ function HoldingRow({
   denomination,
 }: HoldingRowProps): ReactNode {
   const Mark = denomination === 'STOA' ? StoaMark : UrStoaMark;
+  // UrStoa figures carry 3 decimals on-chain; the STOA-denominated earnings 12.
+  const decimals = denomination === 'STOA' ? 12 : 3;
   return (
     <div className={styles.row} data-testid={`${testId}-row`}>
       <span className={styles.label}>{label}</span>
@@ -237,10 +277,77 @@ function HoldingRow({
           data-full-value={amount}
           title={amount}
         >
-          {formatEU(amount)}
+          {formatEU(toFixedDecimals(amount, decimals))}
           <Mark />
         </span>
       )}
     </div>
+  );
+}
+
+/**
+ * Inline stroke icons for the four UrStoa action chips — no icon dependency
+ * (mirrors `NavIcons`). Each inherits the chip's `currentColor` (silver) and is
+ * `aria-hidden`; the button's label span supplies the accessible name.
+ */
+interface IconProps {
+  readonly className?: string;
+}
+
+function svgProps(className?: string) {
+  return {
+    width: 20,
+    height: 20,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+    className,
+  };
+}
+
+/** Transfer: a paper-plane (native send to another account). */
+function TransferIcon({ className }: IconProps): ReactNode {
+  return (
+    <svg {...svgProps(className)}>
+      <path d="m22 2-7 20-4-9-9-4Z" />
+      <path d="M22 2 11 13" />
+    </svg>
+  );
+}
+
+/** Stake: an arrow descending INTO the vault (deposit). */
+function StakeIcon({ className }: IconProps): ReactNode {
+  return (
+    <svg {...svgProps(className)}>
+      <rect x="3" y="14" width="18" height="7" rx="2" />
+      <path d="M12 3v8" />
+      <path d="m8 7 4 4 4-4" />
+    </svg>
+  );
+}
+
+/** Unstake: an arrow rising OUT of the vault (withdraw). */
+function UnstakeIcon({ className }: IconProps): ReactNode {
+  return (
+    <svg {...svgProps(className)}>
+      <rect x="3" y="14" width="18" height="7" rx="2" />
+      <path d="M12 11V3" />
+      <path d="m8 7 4-4 4 4" />
+    </svg>
+  );
+}
+
+/** Collect: a stack of coins (gather the vault's STOA rewards). */
+function CollectIcon({ className }: IconProps): ReactNode {
+  return (
+    <svg {...svgProps(className)}>
+      <ellipse cx="12" cy="6" rx="7" ry="3" />
+      <path d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6" />
+      <path d="M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6" />
+    </svg>
   );
 }

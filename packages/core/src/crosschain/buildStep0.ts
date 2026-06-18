@@ -79,7 +79,9 @@ const K_ACCOUNT = /^k:[0-9a-fA-F]{64}$/;
  *
  * Validation refuses BEFORE any build or network read, in this order:
  *   1. source ≠ target
- *   2. receiver is a valid k: account and not a self-send
+ *   2. receiver is a valid k: account (a self-send to your OWN account on a
+ *      DIFFERENT chain IS allowed — that is the canonical cross-chain move; the
+ *      source ≠ target check above already rules out a pointless same-chain self)
  *   3. amount is a positive ≤12-decimal value
  *   4. chain 0 has a gas-station pubkey
  */
@@ -103,7 +105,10 @@ export async function buildCrossChainStep0(
 
   // The k: prefix MUST be confirmed before stripping it; classifyPaymentKey from
   // the SDK accepts any "k:" body length, so a precise regex guards the pubkey.
-  if (!K_ACCOUNT.test(receiver) || receiver === sender) {
+  // A self-send (receiver === sender) is NOT refused here: moving your own funds
+  // to your own account on another chain is the primary cross-chain use; the
+  // source ≠ target guard above already excludes the pointless same-chain self.
+  if (!K_ACCOUNT.test(receiver)) {
     return { ok: false, reason: 'invalid-recipient' };
   }
   const receiverPubKey = receiver.slice(2);

@@ -19,18 +19,16 @@ describe('formatUrStoaAmount', () => {
     expect(formatUrStoaAmount('1.50')).toBe('1.50');
   });
 
-  it('preserves a small high-precision value at the confirmed 24-decimal scale', () => {
-    // UrStoa uses the SDK default 24-decimal scale (the executor calls
-    // formatDecimalForPact(amount) with no scale override).
-    const small = '0.000000000000000000000001'; // 24 fractional digits
-    expect(formatUrStoaAmount(small)).toBe(small);
+  it('preserves a 3-decimal value verbatim (UrStoa is a 3-decimal token)', () => {
+    expect(formatUrStoaAmount('1.234')).toBe('1.234');
   });
 
-  it('truncates beyond 24 fractional digits rather than rounding (the 25th digit is dropped)', () => {
-    expect(URSTOA_DECIMALS).toBe(24);
-    // 25 fractional digits -> truncated to 24, last input "9" discarded.
-    const overscale = '1.1234567890123456789012349';
-    expect(formatUrStoaAmount(overscale)).toBe('1.123456789012345678901234');
+  it('truncates beyond 3 fractional digits rather than rounding (the 4th digit is dropped)', () => {
+    expect(URSTOA_DECIMALS).toBe(3);
+    // 4+ fractional digits -> truncated to 3; the trailing "9" is discarded, NOT
+    // rounded up (truncation, never rounding — no silent magnitude change).
+    expect(formatUrStoaAmount('1.2349')).toBe('1.234');
+    expect(formatUrStoaAmount('0.999999')).toBe('0.999');
   });
 
   it('rejects malicious Pact-code injection instead of interpolating it raw', () => {

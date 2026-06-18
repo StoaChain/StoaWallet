@@ -2,6 +2,9 @@ import type {
   RemoteVault,
   RemoteUnlockResult,
   RemoteUrStoaOutcome,
+  RemoteWalletSummary,
+  RemotePureKeypair,
+  RemoteImportCodexResult,
   WalletActionReason,
 } from '@stoawallet/ui';
 
@@ -90,6 +93,83 @@ export class BackgroundKeyVaultProxy implements RemoteVault {
   async isUnlocked(): Promise<boolean> {
     const res = await this.send({ type: 'isUnlocked' });
     return res.ok === true && res.unlocked === true;
+  }
+
+  /**
+   * The auto-lock TICK: poll the worker's session status. This message keeps the
+   * MV3 worker alive (each inbound message resets its idle-termination timer) and
+   * the worker pokes the auto-lock + reports the live expiry for the countdown.
+   */
+  async getSession(): Promise<{
+    unlocked: boolean;
+    expiresAt: number | null;
+    autoLockMinutes: number;
+  }> {
+    const res = await this.send({ type: 'getSession' });
+    if (res.ok) {
+      return {
+        unlocked: res.unlocked,
+        expiresAt: res.expiresAt,
+        autoLockMinutes: res.autoLockMinutes,
+      };
+    }
+    return { unlocked: false, expiresAt: null, autoLockMinutes: 0 };
+  }
+
+  /** Set the auto-lock window (minutes); the worker clamps + persists it. */
+  async setAutoLock(minutes: number): Promise<number> {
+    const res = await this.send({ type: 'setAutoLock', minutes });
+    return res.ok ? res.autoLockMinutes : minutes;
+  }
+
+  /** Every seed (wallet) in the vault — public summaries for the Advanced tab. */
+  async listWallets(): Promise<readonly RemoteWalletSummary[]> {
+    const res = await this.send({ type: 'listWallets' });
+    return res.ok ? res.wallets : [];
+  }
+
+  /** Every vault pure keypair — public summaries for the Advanced tab. */
+  async listPureKeypairs(): Promise<readonly RemotePureKeypair[]> {
+    const res = await this.send({ type: 'listPureKeypairs' });
+    return res.ok ? res.keys : [];
+  }
+
+  /** Switch the active seed in the worker (re-points signing). */
+  async setActiveWallet(walletId: string): Promise<RemoteUnlockResult> {
+    const res = await this.send({ type: 'setActiveWallet', walletId });
+    return res.ok ? { ok: true } : { ok: false, reason: mapReason(res.reason) };
+  }
+
+  /** Derive a specific account index on a seed (returns ack; the UI re-lists). */
+  async addAccountAtIndex(
+    walletId: string,
+    index: number,
+  ): Promise<RemoteUnlockResult> {
+    const res = await this.send({ type: 'addAccountAtIndex', walletId, index });
+    return res.ok ? { ok: true } : { ok: false, reason: mapReason(res.reason) };
+  }
+
+  /** Rename a seed (non-secret metadata); ack/failure. */
+  async renameWallet(walletId: string, name: string): Promise<RemoteUnlockResult> {
+    const res = await this.send({ type: 'renameWallet', walletId, name });
+    return res.ok ? { ok: true } : { ok: false, reason: mapReason(res.reason) };
+  }
+
+  /** Remove a derived account (index #0 is rejected host-side); ack/failure. */
+  async removeAccount(walletId: string, index: number): Promise<RemoteUnlockResult> {
+    const res = await this.send({ type: 'removeAccount', walletId, index });
+    return res.ok ? { ok: true } : { ok: false, reason: mapReason(res.reason) };
+  }
+
+  /** Import an Ouronet Codex export in the worker; only counts return. */
+  async importCodex(
+    json: string,
+    codexPassword: string,
+  ): Promise<RemoteImportCodexResult> {
+    const res = await this.send({ type: 'importCodex', json, codexPassword });
+    return res.ok
+      ? { ok: true, summary: res.summary }
+      : { ok: false, reason: res.reason };
   }
 
   /** The active account of the unlocked wallet, or null. Carries no key. */

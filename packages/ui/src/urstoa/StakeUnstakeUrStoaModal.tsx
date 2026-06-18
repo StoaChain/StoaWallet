@@ -1,6 +1,10 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { TokenGlyph } from '../theme/TokenGlyph';
+
+import { AmountDisplay } from '../components/AmountDisplay';
+import { useToast } from '../toast/ToastContext';
+import { useTxToast } from '../toast/useTxToast';
 
 import { maxUnstake } from './maxUnstake';
 import styles from './StakeUnstakeUrStoaModal.module.css';
@@ -47,6 +51,8 @@ export interface StakeUnstakeUrStoaModalProps {
   readonly initialKind?: StakeUnstakeKind;
   /** Called when a `locked` outcome should route the user to unlock. */
   readonly onRequireUnlock?: () => void;
+  /** Dismiss the modal (the UrStoa tab owns the open-state and closes it). */
+  readonly onClose?: () => void;
 }
 
 /**
@@ -71,6 +77,7 @@ export function StakeUnstakeUrStoaModal({
   hookOptions,
   initialKind = 'stake',
   onRequireUnlock,
+  onClose,
 }: StakeUnstakeUrStoaModalProps): ReactNode {
   const [kind, setKind] = useState<StakeUnstakeKind>(initialKind);
   const [amount, setAmount] = useState('');
@@ -85,6 +92,34 @@ export function StakeUnstakeUrStoaModal({
   const status = state.status;
   const inFlight = status === 'building' || status === 'submitting';
   const isLocked = status === 'error' && state.reason === 'locked';
+
+  // Once SUBMITTED, hand off to the shared floating tx toast (pending → confirmed
+  // → auto-dismiss) and return to the overview — the SAME mechanism every flow
+  // uses, so a submitted stake/unstake never lingers as a static rectangle.
+  const trackTx = useTxToast();
+  const toast = useToast();
+  const refresh = hookOptions?.refresh;
+  const firedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (status !== 'success' && status !== 'pending') return;
+    const requestKey =
+      'requestKey' in state ? (state.requestKey ?? undefined) : undefined;
+    const fireKey = requestKey ?? (status === 'pending' ? 'pending' : null);
+    if (fireKey === null || firedRef.current === fireKey) return;
+    firedRef.current = fireKey;
+    const label = kind === 'stake' ? 'Stake' : 'Unstake';
+    if (requestKey !== undefined) {
+      trackTx({ requestKey, chainId: '0', label, onConfirmed: refresh });
+    } else {
+      toast.show({
+        status: 'info',
+        title: `${label} submitted`,
+        detail: 'Confirmation unknown — check the explorer.',
+        autoDismissMs: 9000,
+      });
+    }
+    onClose?.();
+  }, [status, state, kind, trackTx, toast, refresh, onClose]);
 
   // The floor-clamped unstake max (REQ-21). A sole staker (`userStaked >=
   // vaultTotal`) gets `userStaked - 1.0`; otherwise the full stake. A fail-closed
@@ -122,9 +157,14 @@ export function StakeUnstakeUrStoaModal({
     if (unstakeMax?.ok === true) setAmount(unstakeMax.max);
   };
 
+  // The balance shown beneath the amount: STAKE bounds against the spendable
+  // WALLET balance, UNSTAKE against the user's own VAULT stake.
+  const modeBalance =
+    kind === 'stake' ? holdings.walletBalance : holdings.userStaked;
+
   if (isLocked) {
     return (
-      <section className={styles.modal} data-testid="stake-locked">
+      <section className={styles.page} data-testid="stake-locked">
         <p className={styles.lockedText}>
           Your wallet is locked — unlock it to stake or unstake.
         </p>
@@ -141,7 +181,7 @@ export function StakeUnstakeUrStoaModal({
   }
 
   return (
-    <section className={styles.modal} data-testid="stake-modal">
+    <section className={styles.page} data-testid="stake-modal">
       <div className={styles.modeToggle} role="group" aria-label="Stake or unstake">
         <button
           type="button"
@@ -165,40 +205,57 @@ export function StakeUnstakeUrStoaModal({
 
       <div className={styles.fields}>
         <label className={styles.label}>
-          <span className={styles.labelRow}>
-            <span className={styles.labelText}>
-              Amount{' '}
-              <TokenGlyph token="UrStoa" className={styles.amountGlyph} />
-            </span>
+          <span className={styles.labelText}>
+            Amount <TokenGlyph token="UrStoa" className={styles.amountGlyph} />
+          </span>
+          <div className={styles.fieldGroup}>
+            <input
+              data-testid="stake-amount"
+              className={styles.ghostInput}
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="0.000"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+            <span className={styles.fieldDivider} aria-hidden="true" />
             {kind === 'unstake' && unstakeMax?.ok === false ? (
               <span
                 className={styles.maxUnavailable}
                 data-testid="stake-max-unavailable"
               >
-                Vault total unavailable — can&apos;t compute max
+                Max unavailable
               </span>
             ) : (
               <button
                 type="button"
-                className={styles.maxButton}
+                className={styles.fieldMax}
                 data-testid="stake-max"
                 onClick={onMax}
               >
-                Max
+                MAX
               </button>
             )}
+          </div>
+          <span className={styles.balanceRow} data-testid="stake-balance">
+            <span className={styles.balanceLeft}>
+              {kind === 'stake' ? 'Wallet balance' : 'Vault (staked)'}
+            </span>
+            <span className={styles.balanceValue}>
+              {modeBalance !== null ? (
+                <AmountDisplay
+                  amount={modeBalance}
+                  size="sub"
+                  glyph="urstoa"
+                  align="right"
+                />
+              ) : (
+                <span className={styles.balanceUnknown}>—</span>
+              )}
+            </span>
           </span>
-          <input
-            data-testid="stake-amount"
-            className={styles.input}
-            type="text"
-            inputMode="decimal"
-            autoComplete="off"
-            spellCheck={false}
-            placeholder="0.0"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
         </label>
 
         {kind === 'unstake' && isSoleStaker && (
@@ -227,41 +284,8 @@ export function StakeUnstakeUrStoaModal({
         </div>
       )}
 
-      {status === 'success' && (
-        <div className={styles.success} data-testid="stake-success">
-          <p className={styles.successText}>
-            {kind === 'stake' ? 'Stake submitted.' : 'Unstake submitted.'}
-          </p>
-          <p className={styles.requestKey}>
-            Request key: <span className={styles.mono}>{state.requestKey}</span>
-          </p>
-          <button
-            type="button"
-            className={styles.secondary}
-            onClick={() => {
-              setAmount('');
-              reset();
-            }}
-          >
-            Done
-          </button>
-        </div>
-      )}
-
-      {status === 'pending' && (
-        <div className={styles.pending} role="status" data-testid="stake-pending">
-          <p className={styles.pendingText}>
-            Submitted — confirmation unknown. The transaction may have reached the
-            network; check the explorer before retrying to avoid acting twice.
-          </p>
-          {state.requestKey !== undefined && (
-            <p className={styles.requestKey}>
-              Request key:{' '}
-              <span className={styles.mono}>{state.requestKey}</span>
-            </p>
-          )}
-        </div>
-      )}
+      {/* Submitted/pending outcomes are handed to the floating tx toast (which
+          confirms on-chain + auto-dismisses); the page returns to the overview. */}
 
       {status === 'error' && (
         <div className={styles.error} role="alert" data-testid="stake-error">

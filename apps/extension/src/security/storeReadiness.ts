@@ -183,7 +183,10 @@ export function auditStoreReadiness(
     }
   }
 
-  // (e) No dangerous permissions.
+  // (e) No dangerous permissions. The validator gates on a DENY-list, not an
+  // allow-list, so the least-privilege trio (`storage`/`idle`/`sidePanel`) passes:
+  // `sidePanel` is a legit addition (it only opens the wallet's own docked panel,
+  // granting no page read/inject), so it is intentionally NOT forbidden.
   const perms = Array.isArray(manifest.permissions) ? manifest.permissions : [];
   for (const bad of FORBIDDEN_PERMISSIONS) {
     if (perms.includes(bad)) {

@@ -1,5 +1,10 @@
 node_modules/
 dist/
+# TS typecheck/build-mode emit for the extension — redirected OUT of `dist/` so
+# `tsc -b` (composite project refs) can't pollute Vite's loadable extension output
+# with `__tests__/*.js` (Chrome MV3 rejects `_`-prefixed paths). See apps/extension/tsconfig.json.
+.tsbuild/
+apps/extension/.tsbuild/
 .bee/
 .claude/
 .env

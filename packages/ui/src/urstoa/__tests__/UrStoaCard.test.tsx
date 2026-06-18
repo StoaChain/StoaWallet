@@ -89,7 +89,7 @@ describe('UrStoaCard', () => {
     expect(screen.queryByText(/wrapped/i)).toBeNull();
   });
 
-  it('formats amounts via the European formatter while preserving the full-precision value', () => {
+  it('shows a wallet UrStoa at 3-decimal precision via the EU formatter while preserving the exact value', () => {
     mockHoldings({
       walletBalance: '6081.3874',
       vaultBalance: '1000.0',
@@ -99,8 +99,9 @@ describe('UrStoaCard', () => {
     render(<UrStoaCard />);
 
     const value = screen.getByTestId('urstoa-wallet-value');
-    // formatEU: "6081.3874" → "6.081,3874" (dot thousands, comma decimal).
-    expect(value).toHaveTextContent('6.081,3874');
+    // UrStoa is a 3-decimal token: "6081.3874" displays clamped to 3 →
+    // "6.081,387" (dot thousands, comma decimal), no Number round-trip.
+    expect(value).toHaveTextContent('6.081,387');
     // The exact on-chain value is never lost: it lives on title/data-full-value.
     expect(value).toHaveAttribute('data-full-value', '6081.3874');
     expect(value).toHaveAttribute('title', '6081.3874');
@@ -119,7 +120,8 @@ describe('UrStoaCard', () => {
 
     const earnings = screen.getByTestId('urstoa-earnings-value');
     expect(earnings).not.toHaveTextContent('[object Object]');
-    expect(earnings).toHaveTextContent('1.234,5');
+    // Claimable is STOA — a 12-decimal token: "1234.5" displays padded to 12.
+    expect(earnings).toHaveTextContent('1.234,500000000000');
     expect(earnings).toHaveAttribute('data-full-value', '1234.5');
   });
 

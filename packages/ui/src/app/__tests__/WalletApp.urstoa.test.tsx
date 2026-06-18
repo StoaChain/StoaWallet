@@ -86,7 +86,9 @@ async function renderUnlockedOnUrStoa() {
     </WalletProvider>,
   );
 
-  const unlockInput = await screen.findByLabelText(/password/i);
+  const unlockInput = await screen.findByLabelText(/password/i, {
+    selector: 'input',
+  });
   await act(async () => {
     const input = unlockInput as HTMLInputElement;
     const setter = Object.getOwnPropertyDescriptor(

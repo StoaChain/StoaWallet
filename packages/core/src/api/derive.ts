@@ -14,14 +14,22 @@ export interface DerivedAccount {
   readonly encryptedSecretKey: EncryptedString;
 }
 
+/** The seed derivation schemes the builder routes by (mirrors the SDK's). */
+export type DeriveSeedType = 'koala' | 'chainweaver' | 'eckowallet';
+
 /**
- * Derive a wallet account from a 24-word koala (BIP39) mnemonic.
+ * Derive a wallet account from a mnemonic, routed by `seedType`:
+ *   - `koala` (default) — 24-word BIP39, SLIP-10 nacl Ed25519.
+ *   - `chainweaver` / `eckowallet` — 12-word Kadena BIP32-Ed25519 (WASM).
  *
- * Thin wrapper over `KadenaWalletBuilder.createWalletPairFromMnemonic` — it
- * does NOT reimplement HD derivation. The SDK arg order is password-FIRST.
+ * Thin wrapper over `KadenaWalletBuilder.createWalletPairFromMnemonic` — it does
+ * NOT reimplement HD derivation. The SDK arg order is password-FIRST, seedType
+ * LAST. For koala the returned `encryptedSecretKey` decrypts to a raw nacl key;
+ * for chainweaver/ecko it is the WASM `EncryptedString` the signer drives with
+ * the same password.
  *
- * The password binds the returned `encryptedSecretKey`: the same triple
- * (mnemonic, password, index) deterministically reproduces the same keypair,
+ * The password binds the returned `encryptedSecretKey`: the same quadruple
+ * (mnemonic, password, index, seedType) deterministically reproduces the keypair,
  * which is what lets the at-rest encrypted secret be re-derived on unlock.
  *
  * @throws {Error} if `password` is empty — deriving under a default/empty
@@ -31,6 +39,7 @@ export async function deriveAccount(
   mnemonic: string,
   password: string,
   index: number,
+  seedType: DeriveSeedType = 'koala',
 ): Promise<DerivedAccount> {
   if (password.length === 0) {
     throw new Error(
@@ -43,6 +52,7 @@ export async function deriveAccount(
       password,
       mnemonic,
       index,
+      seedType,
     );
 
   return {

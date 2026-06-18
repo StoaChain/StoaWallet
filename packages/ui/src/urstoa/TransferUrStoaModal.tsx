@@ -1,4 +1,8 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+
+import { AmountDisplay } from '../components/AmountDisplay';
+import { useToast } from '../toast/ToastContext';
+import { useTxToast } from '../toast/useTxToast';
 
 import { UrStoaMark } from './glyph';
 import styles from './TransferUrStoaModal.module.css';
@@ -67,6 +71,38 @@ export function TransferUrStoaModal({
 
   const { state, preview, send, confirm, reset } = useTransfer(hookOptions);
 
+  // The sender's spendable UrStoa balance (chain 0) — the SAME value the hook uses
+  // for its insufficient-funds pre-flight. Shown under the amount + driving MAX
+  // (gas is sponsored, so the full balance is sendable). Null = unknown read.
+  const walletBalance = hookOptions?.walletBalance ?? null;
+
+  // Once SUBMITTED, hand off to the shared floating tx toast (pending → confirmed
+  // → auto-dismiss) and return to the overview — the SAME mechanism every flow uses.
+  const trackTx = useTxToast();
+  const toast = useToast();
+  const refresh = hookOptions?.refresh;
+  const firedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const s = state.status;
+    if (s !== 'success' && s !== 'pending') return;
+    const requestKey =
+      'requestKey' in state ? (state.requestKey ?? undefined) : undefined;
+    const fireKey = requestKey ?? (s === 'pending' ? 'pending' : null);
+    if (fireKey === null || firedRef.current === fireKey) return;
+    firedRef.current = fireKey;
+    if (requestKey !== undefined) {
+      trackTx({ requestKey, chainId: '0', label: 'Transfer', onConfirmed: refresh });
+    } else {
+      toast.show({
+        status: 'info',
+        title: 'Transfer submitted',
+        detail: 'Confirmation unknown — check the explorer.',
+        autoDismissMs: 9000,
+      });
+    }
+    onClose();
+  }, [state, trackTx, toast, refresh, onClose]);
+
   if (!open) return null;
 
   const status = state.status;
@@ -83,37 +119,13 @@ export function TransferUrStoaModal({
     void confirm();
   };
 
-  const onCancel = (): void => {
-    reset();
-    setRecipient('');
-    setAmount('');
-    onClose();
-  };
-
   return (
-    <div
-      className={styles.backdrop}
-      data-testid="urstoa-transfer-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Transfer UrStoa"
-    >
-      <section className={styles.modal}>
-        <header className={styles.header}>
-          <h2 className={styles.title}>
-            Transfer <UrStoaMark className={styles.titleGlyph} />
-          </h2>
-          <button
-            type="button"
-            className={styles.close}
-            onClick={onCancel}
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </header>
+    <section className={styles.page} data-testid="urstoa-transfer-modal">
+      <h2 className={styles.title}>
+        Transfer <UrStoaMark decorative className={styles.titleGlyph} />
+      </h2>
 
-        {isLocked ? (
+      {isLocked ? (
           <div className={styles.locked} data-testid="urstoa-transfer-locked">
             <p className={styles.lockedText}>
               Your wallet is locked — unlock it to transfer.
@@ -132,34 +144,69 @@ export function TransferUrStoaModal({
             <form className={styles.fields} onSubmit={onSubmitPreview}>
               <label className={styles.label}>
                 <span className={styles.labelText}>Recipient</span>
-                <input
-                  data-testid="urstoa-transfer-recipient"
-                  className={styles.input}
-                  type="text"
-                  inputMode="text"
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder="k:…"
-                  value={recipient}
-                  onChange={(e) => setRecipient(e.target.value)}
-                />
+                <div className={styles.fieldGroup}>
+                  <input
+                    data-testid="urstoa-transfer-recipient"
+                    className={styles.ghostInput}
+                    type="text"
+                    inputMode="text"
+                    autoComplete="off"
+                    spellCheck={false}
+                    aria-label="Recipient"
+                    placeholder="k:…"
+                    value={recipient}
+                    onChange={(e) => setRecipient(e.target.value)}
+                  />
+                </div>
               </label>
 
               <label className={styles.label}>
                 <span className={styles.labelText}>
                   Amount <UrStoaMark className={styles.amountGlyph} />
                 </span>
-                <input
-                  data-testid="urstoa-transfer-amount"
-                  className={styles.input}
-                  type="text"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder="0.000000000000000000000000"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                />
+                <div className={styles.fieldGroup}>
+                  <input
+                    data-testid="urstoa-transfer-amount"
+                    className={styles.ghostInput}
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder="0.000"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                  />
+                  <span className={styles.fieldDivider} aria-hidden="true" />
+                  <button
+                    type="button"
+                    data-testid="urstoa-transfer-max"
+                    className={styles.fieldMax}
+                    disabled={walletBalance === null}
+                    onClick={() => {
+                      if (walletBalance !== null) setAmount(walletBalance);
+                    }}
+                  >
+                    MAX
+                  </button>
+                </div>
+                <span
+                  className={styles.balanceRow}
+                  data-testid="urstoa-transfer-balance"
+                >
+                  <span className={styles.balanceLeft}>Wallet balance</span>
+                  <span className={styles.balanceValue}>
+                    {walletBalance !== null ? (
+                      <AmountDisplay
+                        amount={walletBalance}
+                        size="sub"
+                        glyph="urstoa"
+                        align="right"
+                      />
+                    ) : (
+                      <span className={styles.balanceUnknown}>—</span>
+                    )}
+                  </span>
+                </span>
               </label>
 
               {reason === 'invalid-recipient' && (
@@ -177,8 +224,7 @@ export function TransferUrStoaModal({
                   role="alert"
                   data-testid="urstoa-transfer-invalid-amount"
                 >
-                  Enter a valid amount — a positive number with at most 24
-                  decimal places.
+                  Enter a valid amount — a positive number.
                 </p>
               )}
               {reason === 'insufficient-funds' && (
@@ -214,9 +260,13 @@ export function TransferUrStoaModal({
                   </div>
                   <div className={styles.previewRow}>
                     <dt>Amount</dt>
-                    <dd className={styles.mono}>
-                      {preview.amount}{' '}
-                      <UrStoaMark className={styles.amountGlyph} />
+                    <dd>
+                      <AmountDisplay
+                        amount={preview.amount}
+                        size="sub"
+                        glyph="urstoa"
+                        align="right"
+                      />
                     </dd>
                   </div>
                   <div className={styles.previewRow}>
@@ -268,49 +318,9 @@ export function TransferUrStoaModal({
               </div>
             )}
 
-            {status === 'success' && (
-              <div
-                className={styles.success}
-                data-testid="urstoa-transfer-success"
-              >
-                <p className={styles.successText}>Transfer submitted.</p>
-                <p className={styles.requestKey}>
-                  Request key:{' '}
-                  <span className={styles.mono}>{state.requestKey}</span>
-                </p>
-                <button
-                  type="button"
-                  className={styles.secondary}
-                  onClick={() => {
-                    reset();
-                    setRecipient('');
-                    setAmount('');
-                  }}
-                >
-                  Transfer again
-                </button>
-              </div>
-            )}
-
-            {status === 'pending' && (
-              <div
-                className={styles.pending}
-                role="status"
-                data-testid="urstoa-transfer-pending"
-              >
-                <p className={styles.pendingText}>
-                  Submitted — confirmation unknown. The transfer may have reached
-                  the network; check the explorer before retrying to avoid sending
-                  twice.
-                </p>
-                {state.requestKey !== undefined && (
-                  <p className={styles.requestKey}>
-                    Request key:{' '}
-                    <span className={styles.mono}>{state.requestKey}</span>
-                  </p>
-                )}
-              </div>
-            )}
+            {/* Submitted/pending outcomes are handed to the floating tx toast
+                (which confirms on-chain + auto-dismisses); the page returns to the
+                overview. Validation + gas-payer errors stay inline below. */}
 
             {reason === 'gas-payer-rejected' && (
               <div
@@ -359,7 +369,6 @@ export function TransferUrStoaModal({
               )}
           </>
         )}
-      </section>
-    </div>
+    </section>
   );
 }

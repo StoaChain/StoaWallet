@@ -21,6 +21,19 @@ export interface TokenGlyphProps {
   readonly className?: string;
   /** Optional style override (color is set from the token by default). */
   readonly style?: CSSProperties;
+  /**
+   * Optional size marker forwarded as a `data-glyph-size` attribute. Lets a
+   * consumer (e.g. AmountDisplay) tag the rendered mark with the number size it
+   * was matched to, without leaking layout-size logic into this primitive.
+   */
+  readonly 'data-glyph-size'?: string;
+  /**
+   * Render the mark as PURELY decorative — `aria-hidden`, no `role="img"`/label —
+   * for places where adjacent text already names the token (e.g. a "Collect ❖"
+   * modal title). Avoids a duplicate accessible "STOA"/"UrStoa" image next to the
+   * meaningful figure. Defaults to false (the labeled unit-mark behavior).
+   */
+  readonly decorative?: boolean;
 }
 
 /**
@@ -32,13 +45,19 @@ export function TokenGlyph({
   'aria-label': ariaLabel,
   className,
   style,
+  'data-glyph-size': dataGlyphSize,
+  decorative = false,
 }: TokenGlyphProps): ReactNode {
   const { glyph, color } = tokenGlyphs[token];
+  // Decorative marks carry no accessible role/name — adjacent text names the token.
+  const a11y = decorative
+    ? { 'aria-hidden': true as const }
+    : { role: 'img', 'aria-label': ariaLabel ?? token };
   return (
     <span
-      role="img"
-      aria-label={ariaLabel ?? token}
+      {...a11y}
       data-token={token}
+      data-glyph-size={dataGlyphSize}
       className={className}
       style={{ color, ...style }}
     >

@@ -1,5 +1,10 @@
 import { useCallback, type ReactNode } from 'react';
 
+// Global theme stylesheet (the `--color-stoa-*` vars the approval views' module
+// CSS references). The approval window mounts ApprovalApp, NOT WalletApp, so it
+// needs its own load of the shared theme or it renders unstyled.
+import '../../theme/theme.css';
+
 import { useSessionGuard } from '../../app/useSessionGuard';
 import { UnlockScreen } from '../../wallet/UnlockScreen';
 import type {

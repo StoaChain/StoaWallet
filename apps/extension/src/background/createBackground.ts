@@ -23,6 +23,7 @@
  * by `lock()`. It is never persisted plaintext and never crosses to the popup.
  */
 import type { KeyringManager, KeyVault, StorageAdapter } from '@stoawallet/core';
+import { getAutoLockMinutes, setAutoLockMinutes } from '@stoawallet/core';
 
 import type { Request, Response } from '../messaging/protocol';
 import { err } from '../messaging/protocol';
@@ -55,6 +56,8 @@ export interface CreateBackgroundDeps {
   readonly idleSeconds?: number;
   /** The idle API; defaults to the global `chrome.idle` when present. */
   readonly idle?: IdleApi;
+  /** Wall clock for the timestamp auto-lock; defaults to `Date.now`. Injected in tests. */
+  readonly now?: () => number;
   /**
    * The shared single-use approval-token registry (XP-3). When omitted, the
    * background creates its own — but the production wiring injects the SAME
@@ -130,6 +133,32 @@ export interface Background {
    * signing request; the matching `signTx` consumes it exactly once.
    */
   mintApprovalToken(): string;
+  /**
+   * KEEPALIVE poke from the popup's connected port. It (a) keeps this MV3 worker
+   * alive while the popup is open — so the in-memory session survives the user
+   * filling a form (the fix for "locked on every send"), (b) enforces the
+   * TIMESTAMP auto-lock: locks if the unlock window has elapsed, and (c) reports
+   * the live session expiry so the popup can render a countdown. It does NOT
+   * re-arm the window — only genuine user ops (serviced messages) are activity.
+   */
+  pokeSession(): SessionStatus;
+  /**
+   * Set the auto-lock window in MINUTES (clamped to [1, 6]) — persists it and
+   * re-arms the live window. Returns the clamped value the popup should reflect.
+   */
+  setAutoLock(minutes: number): Promise<number>;
+  /** The current session status WITHOUT poking (read-only snapshot for a query). */
+  sessionStatus(): SessionStatus;
+}
+
+/** The live auto-lock session snapshot the popup renders a countdown from. */
+export interface SessionStatus {
+  /** Whether the vault is currently unlocked. */
+  readonly unlocked: boolean;
+  /** Epoch-ms when the wallet will auto-lock, or null when locked. */
+  readonly expiresAt: number | null;
+  /** The configured auto-lock window in minutes. */
+  readonly autoLockMinutes: number;
 }
 
 /** chrome enforces a 15s floor on the idle detection interval. */
@@ -158,9 +187,22 @@ function isTrustedSender(sender: chrome.runtime.MessageSender, runtimeId: string
 export function createBackground(deps: CreateBackgroundDeps): Background {
   const { manager, keyVault, runtimeId, configureNode } = deps;
   const storage = deps.storage ?? extractStorage(manager);
-  const idleSeconds = Math.max(MIN_IDLE_SECONDS, deps.idleSeconds ?? DEFAULT_IDLE_SECONDS);
+  const now = deps.now ?? (() => Date.now());
   const approvalTokens: ApprovalTokenRegistry =
     deps.approvalTokens ?? createApprovalTokenRegistry();
+
+  // The TIMESTAMP auto-lock window. `idleSeconds` (chrome.idle's system-idle
+  // backstop) is derived from the SAME minutes; the timestamp model is what the
+  // keepalive poke enforces and the popup counts down. `autoLockMinutes` starts
+  // from the constructor hint and is refreshed from the persisted pref in start()
+  // and on setAutoLock.
+  let autoLockMinutes = Math.max(
+    1,
+    Math.round((deps.idleSeconds ?? DEFAULT_IDLE_SECONDS) / 60),
+  );
+  let lockDurationMs = autoLockMinutes * 60_000;
+  // Epoch-ms at which the wallet auto-locks, or null when locked / never armed.
+  let lockAt: number | null = null;
 
   function getIdle(): IdleApi | undefined {
     if (deps.idle) return deps.idle;
@@ -168,9 +210,47 @@ export function createBackground(deps: CreateBackgroundDeps): Background {
     return g.chrome?.idle;
   }
 
-  /** Re-arm the idle detection window. Called at start and on every serviced op. */
+  /** Re-arm chrome.idle's system-idle backstop to the current window. */
   function armIdle(): void {
-    getIdle()?.setDetectionInterval(idleSeconds);
+    getIdle()?.setDetectionInterval(Math.max(MIN_IDLE_SECONDS, autoLockMinutes * 60));
+  }
+
+  /**
+   * Re-arm the TIMESTAMP lock window on genuine activity. When the vault is
+   * unlocked the window resets to `now + duration`; when locked it clears. Called
+   * AFTER a serviced op resolves (so a successful unlock arms, a lock clears).
+   */
+  function touchSession(): void {
+    lockAt = keyVault.isUnlocked() ? now() + lockDurationMs : null;
+  }
+
+  /** Lock through the manager (clears the in-memory mnemonic) and clear the window. */
+  function lockNow(): void {
+    void manager.lock();
+    lockAt = null;
+  }
+
+  function snapshot(): SessionStatus {
+    return { unlocked: keyVault.isUnlocked(), expiresAt: lockAt, autoLockMinutes };
+  }
+
+  function pokeSession(): SessionStatus {
+    // Enforce the timestamp window: if the unlock window has elapsed, lock now.
+    if (lockAt !== null && now() >= lockAt) {
+      lockNow();
+      return { unlocked: false, expiresAt: null, autoLockMinutes };
+    }
+    return snapshot();
+  }
+
+  async function setAutoLock(minutes: number): Promise<number> {
+    const clamped = await setAutoLockMinutes(storage, minutes);
+    autoLockMinutes = clamped;
+    lockDurationMs = clamped * 60_000;
+    armIdle();
+    // Re-arm the live window to the new duration (only meaningful when unlocked).
+    touchSession();
+    return clamped;
   }
 
   function handleMessage(
@@ -206,6 +286,24 @@ export function createBackground(deps: CreateBackgroundDeps): Background {
       return true;
     }
 
+    // Auto-lock session messages are handled HERE, not in the keyring router.
+    // `getSession` is a READ-ONLY poll (it must NOT re-arm the window, else the
+    // popup's countdown polling would prevent the lock from ever firing).
+    const reqType = (message as { type?: unknown }).type;
+    if (reqType === 'getSession') {
+      // The auto-lock TICK: poke the window (lock if elapsed) and report the live
+      // status. Read-only re: activity — it never re-arms, so polling it for the
+      // countdown can't keep the wallet unlocked forever.
+      sendResponse({ ok: true, ...pokeSession() });
+      return true;
+    }
+    if (reqType === 'setAutoLock') {
+      void setAutoLock((message as { minutes: number }).minutes)
+        .then((autoLockMinutes) => sendResponse({ ok: true, autoLockMinutes }))
+        .catch(() => sendResponse(err('corrupt-envelope')));
+      return true;
+    }
+
     // A serviced op is activity: re-arm the auto-lock window so an active user
     // is never locked out mid-session.
     armIdle();
@@ -213,6 +311,9 @@ export function createBackground(deps: CreateBackgroundDeps): Background {
     routeRequest(manager, keyVault, message as Request, approvalTokens, deps.urstoaCore)
       .then((response) => {
         sendResponse(response);
+        // Re-arm the TIMESTAMP window AFTER the op resolves so a successful unlock
+        // arms it and a `lock` clears it (touchSession reads the live vault state).
+        touchSession();
         // SG-004: a SUCCESSFUL active-account switch fires the switch hook with
         // the new active account so the entry can push `accountsChanged` to every
         // connected dApp. Read AFTER the switch resolved, so the manager reflects
@@ -245,6 +346,13 @@ export function createBackground(deps: CreateBackgroundDeps): Background {
     // XP-13: apply the persisted node preference BEFORE failover init.
     await configureNode(storage);
 
+    // Load the persisted auto-lock window so a respawn honors the user's choice.
+    // An explicit `idleSeconds` (tests) takes precedence over the stored pref.
+    if (deps.idleSeconds === undefined) {
+      autoLockMinutes = await getAutoLockMinutes(storage);
+      lockDurationMs = autoLockMinutes * 60_000;
+    }
+
     // RR#9: rehydrate the dApp rate-limiter from storage so a respawn cannot
     // reset an origin's spent budget.
     if (deps.dappRouter !== undefined) {
@@ -253,18 +361,15 @@ export function createBackground(deps: CreateBackgroundDeps): Background {
 
     const idle = getIdle();
     if (idle) {
-      idle.setDetectionInterval(idleSeconds);
+      armIdle();
       idle.onStateChanged.addListener((state) => {
         // `idle` (no input for the threshold) and `locked` (OS lock screen) both
         // mean the user stepped away → drop the in-memory secret. An `active`
         // transition re-arms the window instead.
         if (state === 'idle' || state === 'locked') {
-          // Lock through the MANAGER, not just the KeyVault: `manager.lock()`
-          // clears its private `unlocked` field (the decrypted mnemonic +
-          // password) AND calls `keyVault.lock()`. Locking only the KeyVault
-          // would leave that secret resident in the manager, derivable on a
-          // later op — matching the explicit `lock` message path.
-          void manager.lock();
+          // Lock through the MANAGER (clears the decrypted mnemonic + password)
+          // AND clear the timestamp window — matching the explicit `lock` path.
+          lockNow();
         } else {
           armIdle();
         }
@@ -276,7 +381,14 @@ export function createBackground(deps: CreateBackgroundDeps): Background {
     return approvalTokens.mint();
   }
 
-  return { handleMessage, start, mintApprovalToken };
+  return {
+    handleMessage,
+    start,
+    mintApprovalToken,
+    pokeSession,
+    setAutoLock,
+    sessionStatus: snapshot,
+  };
 }
 
 /**

@@ -24,3 +24,10 @@ export {
   type SimulateResult,
   type BuildTxSpec,
 } from './sendSameChain';
+
+export {
+  awaitSendConfirmation,
+  type ConfirmSendDeps,
+  type ConfirmSendResult,
+  type ListenOutcome,
+} from './confirmSend';

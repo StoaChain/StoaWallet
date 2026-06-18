@@ -17,7 +17,9 @@ export {
   advancedAccountsOf,
   pureKeypairsOf,
   CorruptVaultError,
+  SEED_TYPES,
   type EncryptedBlob,
+  type IPureKeypair,
   type SeedType,
   type StoredAccount,
   type StoredWallet,
@@ -47,4 +49,6 @@ export {
   type KeyringManagerDeps,
   type OnboardOptions,
   type OnboardResult,
+  type WalletSummary,
+  type PureKeypairSummary,
 } from './KeyringManager';

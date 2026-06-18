@@ -1,0 +1,28 @@
+/*
+ * Extension-popup DIMENSIONS. A Chrome MV3 action popup auto-sizes to its
+ * content — with no explicit width the document collapses to a thin sliver
+ * (the shell's `width:100%` has no sized ancestor to fill). So the popup root
+ * MUST declare a fixed width here. This lives in the EXTENSION (not the shared
+ * theme.css) because mobile is full-viewport, not a fixed 380px column.
+ *
+ * Bundled + emitted as a <link> by Vite (loaded from 'self'), so it satisfies
+ * the wallet-class `script-src 'self'` CSP without any inline <style>.
+ */
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  width: 380px;
+  height: 600px;
+  background: var(--color-stoa-dark, #0a0a0a);
+}
+
+#root {
+  width: 380px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}

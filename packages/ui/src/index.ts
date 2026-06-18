@@ -29,6 +29,7 @@ export {
   type WalletActionReason,
   type OnboardingMode,
   type ExistingWalletSummary,
+  type ActiveWalletSummary,
   type ContextAddAdvancedResult,
   type ContextResolveForeignKeyResult,
   type ContextResolveAdvancedSigningResult,
@@ -37,6 +38,9 @@ export {
   type RemoteAccount,
   type RemoteSignOutcome,
   type RemoteUrStoaOutcome,
+  type RemoteWalletSummary,
+  type RemotePureKeypair,
+  type RemoteImportCodexResult,
   type ContextUrStoaResult,
   type ContextUrStoaStakeParams,
   type ContextUrStoaCollectParams,
@@ -54,6 +58,14 @@ export {
   type SessionGuard,
   type SessionGuardStatus,
 } from './app/useSessionGuard';
+
+// Shared form controls. PasswordInput: a controlled password field with a local
+// show/hide reveal toggle, used by every password-entry screen (create/import/unlock).
+export { PasswordInput, type PasswordInputProps } from './components/PasswordInput';
+
+// The premium brand splash (logo + gold-orb background + wordmark + content
+// slot) shared by the unlock + onboarding surfaces. Splash-only treatment.
+export { BrandSplash, type BrandSplashProps } from './components/BrandSplash';
 
 // Onboarding flows (create / import) and wallet screens (unlock / account switcher).
 export { CreateWalletFlow, type CreateWalletFlowProps } from './onboarding/CreateWalletFlow';
@@ -81,6 +93,18 @@ export {
 } from './balances/useBalances';
 export { ChainBalanceRow, type ChainBalanceRowProps } from './balances/ChainBalanceRow';
 export { BalancesView, type BalancesViewProps } from './balances/BalancesView';
+
+// AmountDisplay: the canonical 12-decimal STOA/UrStoa money renderer. European
+// separators (`.` thousands, `,` decimal), the full 12 decimals split 3-full /
+// 9-half size, a token glyph alongside, null→dash. Operates on the decimal STRING
+// (never `Number`), so a 12-decimal balance keeps every digit.
+export { AmountDisplay, type AmountDisplayProps } from './components/AmountDisplay';
+
+// The Stoa tab: the native Stoa-coin home — a 10-chain selector, the active
+// account line, the dual balance (all-chain SUM hero + selected-chain sub), a
+// refresh, and the Send/Receive/Cross-chain/Miner actions opened as routed
+// sub-views. Mounted as the default destination of the bottom-nav HOME shell.
+export { StoaTab, type StoaTabProps } from './stoa/StoaTab';
 
 // Receive (Phase 4): active k: address as text + QR + copy.
 export { ReceiveView } from './receive/ReceiveView';
@@ -207,7 +231,7 @@ export {
 
 // UrStoa holdings/movement/staking/vault (Phase 12): the PURE amount/decimal/
 // glyph domain root every core wrapper + UI consumer shares. The injection-safe
-// 24-decimal Pact-amount formatter, the `{ decimal }` hover-unwrap (NEVER
+// 3-decimal (UrStoa) Pact-amount formatter, the `{ decimal }` hover-unwrap (NEVER
 // String()), the fail-closed last-staker-floor `maxUnstake`, and the silver ✦ /
 // gold ❖ token marks. No React state, no I/O.
 export { formatUrStoaAmount, unwrapDecimal, URSTOA_DECIMALS } from './urstoa/amount';

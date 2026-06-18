@@ -167,17 +167,17 @@ describe('useTransferUrStoa', () => {
     expect(urstoaTransfer).not.toHaveBeenCalled();
   });
 
-  it('a 24-decimal amount flows to the seam as a STRING (no Number round-trip) formatted via T12.1, with public sender/receiver and NO keypair', async () => {
+  it('a 3-decimal amount flows to the seam as a STRING formatted via T12.1, with public sender/receiver and NO keypair', async () => {
     const { wrapper } = makeWrapper();
     const urstoaTransfer: TransferUrStoaSeam = vi.fn(async () => OK_TRANSFER);
-    // A 24-fraction-digit amount whose precision a float (Number) cannot hold.
-    const PRECISE = '1.123456789012345678901234';
+    // UrStoa is a 3-decimal token — a within-precision amount passes verbatim.
+    const AMOUNT = '1.234';
     const options = baseOptions({ urstoaTransfer, walletBalance: '1000' });
 
     const { result } = renderHook(() => useTransferUrStoa(options), { wrapper });
 
     await act(async () => {
-      await result.current.send({ recipient: RECIPIENT, amount: PRECISE });
+      await result.current.send({ recipient: RECIPIENT, amount: AMOUNT });
     });
     await act(async () => {
       await result.current.confirm();
@@ -190,14 +190,32 @@ describe('useTransferUrStoa', () => {
       amount: string;
     };
     expect(typeof call.amount).toBe('string');
-    expect(call.amount).toBe(PRECISE);
-    expect(call.amount).not.toBe(String(Number(PRECISE)));
+    expect(call.amount).toBe(AMOUNT);
     expect(call.receiverAddress).toBe(RECIPIENT);
     expect(call.senderAddress).toBe(SENDER);
     // XP-12: no keypair field ever crosses the seam from the hook.
     expect(JSON.stringify(call).toLowerCase()).not.toMatch(
       /privatekey|secretkey|paymentkeypair/,
     );
+  });
+
+  it('rejects an amount with more than UrStoa\'s 3 decimals as invalid-amount (never reaches the seam)', async () => {
+    const { wrapper } = makeWrapper();
+    const urstoaTransfer: TransferUrStoaSeam = vi.fn(async () => OK_TRANSFER);
+    const options = baseOptions({ urstoaTransfer, walletBalance: '1000' });
+
+    const { result } = renderHook(() => useTransferUrStoa(options), { wrapper });
+
+    await act(async () => {
+      // 4 fractional digits — one too many for a 3-decimal token.
+      await result.current.send({ recipient: RECIPIENT, amount: '1.2345' });
+    });
+
+    expect(result.current.state.status).toBe('error');
+    if (result.current.state.status === 'error') {
+      expect(result.current.state.reason).toBe('invalid-amount');
+    }
+    expect(urstoaTransfer).not.toHaveBeenCalled();
   });
 
   it('two synchronous confirm() calls invoke the seam ONCE (RR#6 double-submit guard)', async () => {

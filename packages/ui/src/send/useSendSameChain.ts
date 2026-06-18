@@ -1,5 +1,6 @@
 import {
   getGaslessGating,
+  type ConfirmSendResult,
   type GaslessGating,
   type GaslessResultArtifact,
 } from '@stoawallet/core';
@@ -43,6 +44,19 @@ export type SendState =
     }
   | { readonly status: 'pending'; readonly requestKey?: string };
 
+/**
+ * The on-chain confirmation phase, layered OVER the `success` (submitted) state —
+ * it never changes `status`, so the submitted request key stays visible while the
+ * outcome resolves. `confirming` = listening for the mined result; `confirmed` /
+ * `failed` are definitive on-chain outcomes; `unconfirmed` = the listen timed out
+ * or failed (the tx may still be on chain — show the explorer, never resubmit).
+ */
+export type SendConfirmation =
+  | { readonly phase: 'confirming' }
+  | { readonly phase: 'confirmed'; readonly blockHeight?: number }
+  | { readonly phase: 'failed'; readonly detail?: string }
+  | { readonly phase: 'unconfirmed' };
+
 /** The resolved preview a user reviews before the explicit confirm. */
 export interface SendPreview {
   readonly recipient: string;
@@ -73,6 +87,16 @@ export interface UseSendSameChainOptions {
   /** Called once on a successful submit so the caller refreshes balances. */
   readonly onSuccess?: () => void;
   /**
+   * Awaits the ON-CHAIN outcome of a submitted send so the form can report a real
+   * terminal state (confirmed / failed) instead of stopping at "submitted". When
+   * omitted, the hook stops at `success` with no confirmation layer (tests inject
+   * a stub; the app wires `useWallet().awaitSendConfirmation`).
+   */
+  readonly awaitConfirmation?: (
+    requestKey: string,
+    chainId: string,
+  ) => Promise<ConfirmSendResult>;
+  /**
    * Available spendable balance for a chain, as a decimal STRING (or null when
    * unknown — e.g. a chain still loading or errored). Injected by the form which
    * composes `useBalances`; supplied so the hook can enforce the insufficient-
@@ -85,6 +109,12 @@ export interface UseSendSameChainOptions {
 
 export interface UseSendSameChainResult {
   readonly state: SendState;
+  /**
+   * The on-chain confirmation phase once a send has been submitted, else null. It
+   * is layered OVER `state.status === 'success'` — the request key stays visible
+   * while the outcome resolves. Null whenever no confirmation op is wired.
+   */
+  readonly confirmation: SendConfirmation | null;
   /** The resolved preview once `send()` has run, else null. */
   readonly preview: SendPreview | null;
   /** Gating verdict for the selected chain ('verified' | 'simulate-only'). */
@@ -169,6 +199,7 @@ export function useSendSameChain(
   const sendOp = options.sendSameChain ?? wallet.sendSameChain;
 
   const [state, setState] = useState<SendState>({ status: 'idle' });
+  const [confirmation, setConfirmation] = useState<SendConfirmation | null>(null);
   const [preview, setPreview] = useState<SendPreview | null>(null);
 
   // Cancellation idiom (deliberately NOT the useBalances nonce/identity guard):
@@ -201,6 +232,11 @@ export function useSendSameChain(
     setState(next);
   }, []);
 
+  const safeSetConfirmation = useCallback((next: SendConfirmation | null) => {
+    if (cancelledRef.current) return;
+    setConfirmation(next);
+  }, []);
+
   const gatingFn = useMemo(() => {
     const g = options.gasless;
     if (typeof g === 'function') return g;
@@ -216,8 +252,9 @@ export function useSendSameChain(
     inFlightRef.current = false;
     previewRef.current = null;
     setPreview(null);
+    safeSetConfirmation(null);
     safeSetState({ status: 'idle' });
-  }, [safeSetState]);
+  }, [safeSetState, safeSetConfirmation]);
 
   const send = useCallback(
     async (params: SendParams): Promise<void> => {
@@ -267,6 +304,10 @@ export function useSendSameChain(
       return;
     }
 
+    // A fresh confirm clears any prior confirmation layer so a re-send never
+    // shows the previous transfer's on-chain outcome.
+    safeSetConfirmation(null);
+
     // RR#9: `building` is set synchronously BEFORE the first await so the guard
     // and progress engage immediately, covering keypair re-derivation.
     safeSetState({ status: 'building' });
@@ -299,6 +340,34 @@ export function useSendSameChain(
     if (result.ok) {
       safeSetState({ status: 'success', requestKey: result.requestKey });
       options.onSuccess?.();
+
+      // Layered on-chain confirmation: status STAYS `success` (the request key
+      // remains visible) while we listen for the mined outcome. Only runs when a
+      // confirmation op is wired; a thrown/timeout listen maps to `unconfirmed`
+      // (the tx may be on chain — the form shows the explorer, never resubmits).
+      const confirmOp = options.awaitConfirmation;
+      if (confirmOp !== undefined) {
+        safeSetConfirmation({ phase: 'confirming' });
+        void confirmOp(result.requestKey, current.chainId).then(
+          (outcome) => {
+            if (outcome.ok) {
+              safeSetConfirmation(
+                outcome.status === 'confirmed'
+                  ? { phase: 'confirmed', blockHeight: outcome.blockHeight }
+                  : { phase: 'failed', detail: outcome.detail },
+              );
+            } else {
+              // timeout / listen-failed both mean "couldn't confirm" — unknown,
+              // never reported as a definitive on-chain failure.
+              safeSetConfirmation({ phase: 'unconfirmed' });
+            }
+          },
+          () => {
+            // Defensive: the op is contracted never to reject, but a stub might.
+            safeSetConfirmation({ phase: 'unconfirmed' });
+          },
+        );
+      }
       return;
     }
 
@@ -317,7 +386,7 @@ export function useSendSameChain(
           ? { status: 'error', reason: result.reason, detail: result.detail }
           : { status: 'error', reason: result.reason };
     safeSetState(errorState);
-  }, [sendOp, options, safeSetState]);
+  }, [sendOp, options, safeSetState, safeSetConfirmation]);
 
-  return { state, preview, gating, send, confirm, reset };
+  return { state, confirmation, preview, gating, send, confirm, reset };
 }

@@ -1,12 +1,13 @@
+/* Rendered inside <BrandSplash>'s content slot, which owns the gold-orb
+ * background + centred column. This module styles the create flow's own card:
+ * the seed grid, the confirm gate, the inputs, and the rounded-full gold
+ * primary (hero glow) + glass secondary buttons that match the splash. */
 .flow {
   display: flex;
   flex-direction: column;
   gap: 16px;
   width: 100%;
-  max-width: 420px;
-  margin: 0 auto;
-  padding: 24px;
-  background: var(--color-stoa-dark);
+  text-align: left;
   color: var(--color-stoa-light);
   font-family: var(--font-sans);
 }
@@ -15,6 +16,7 @@
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
+  text-align: center;
   color: var(--color-stoa-light);
 }
 
@@ -22,6 +24,7 @@
   margin: 0;
   font-size: 14px;
   line-height: 1.5;
+  text-align: center;
   color: var(--color-stoa-slate);
 }
 
@@ -54,6 +57,12 @@
 .cellWord {
   font-size: 14px;
   color: var(--color-stoa-light);
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .confirm {
@@ -105,28 +114,50 @@
 .primary {
   padding: 12px 16px;
   border: none;
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--color-stoa-gold);
   color: var(--color-stoa-dark);
   font-family: var(--font-sans);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.primary:hover:not(:disabled) {
+  background: #f5d76e;
+  transform: scale(1.02);
+  box-shadow: 0 0 30px rgba(212, 175, 55, 0.5);
 }
 
 .primary:disabled {
   background: var(--color-status-disabled);
+  box-shadow: none;
   cursor: not-allowed;
 }
 
+/* Glass secondary — translucent surface, rounded-full, lighten on hover. */
 .secondary {
+  flex: 1;
   padding: 10px 16px;
-  border: 1px solid var(--color-stoa-gold);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-stoa-gold);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-stoa-light);
   font-family: var(--font-sans);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.secondary:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.22);
 }

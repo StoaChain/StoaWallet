@@ -13,6 +13,9 @@ import { WalletApp, WalletProvider } from '@stoawallet/ui';
 
 import { ChromeStorageAdapter } from '../storage/ChromeStorageAdapter';
 import { BackgroundKeyVaultProxy } from './BackgroundKeyVaultProxy';
+// Fixed popup width (MV3 action popups auto-size to content → collapse to a
+// sliver without it). Extension-only; bundled by Vite as a CSP-safe <link>.
+import './popup.css';
 
 /**
  * The Chrome MV3 popup root.
@@ -50,16 +53,55 @@ class InertPopupKeyVault implements KeyVault {
   }
 }
 
+/**
+ * Open the full-tab "expand" surface. The MV3 action popup closes on focus-loss,
+ * so the seed-showing onboarding flows are routed OUT of the popup into a real
+ * top-level tab via this callback (handed to the shared shell as `onExpand`, which
+ * keeps `<WalletApp/>` `chrome.*`-free). The URL is the @crxjs-emitted tab page
+ * declared as a Rollup input in vite.config.ts (`dist/src/tab/index.html`).
+ */
+function openInTab(): void {
+  void chrome.tabs.create({ url: chrome.runtime.getURL('src/tab/index.html') });
+}
+
+/**
+ * Open the docked Chrome side panel for the current window. `chrome.sidePanel.open`
+ * requires a user gesture (the header button click) and the active window id, which
+ * `chrome.windows.getCurrent` resolves. Wired ONLY when the API exists (Chrome
+ * 114+); on older Chrome the popup passes no callback so the header button — which
+ * renders only when `onOpenSidePanel` is provided — simply does not appear.
+ */
+function openSidePanel(): void {
+  void chrome.windows.getCurrent().then((win) => {
+    if (win.id !== undefined) {
+      void chrome.sidePanel.open({ windowId: win.id });
+    }
+  });
+}
+
 const container = document.getElementById('root');
 if (container) {
   const storage = new ChromeStorageAdapter();
   const remoteVault = new BackgroundKeyVaultProxy();
   const keyVault = new InertPopupKeyVault();
 
+  // Guard for Chrome <114 / the API being absent: only hand the side-panel
+  // callback to the shell when `chrome.sidePanel.open` actually exists at runtime,
+  // so the header button does not render where it could never work. The static
+  // @types/chrome surface assumes the API is always present, so probe the live
+  // object (which on older Chrome lacks `sidePanel`) rather than the types.
+  const sidePanelApi = (chrome as { sidePanel?: { open?: unknown } }).sidePanel;
+  const onOpenSidePanel =
+    typeof sidePanelApi?.open === 'function' ? openSidePanel : undefined;
+
   createRoot(container).render(
     <StrictMode>
       <WalletProvider storage={storage} keyVault={keyVault} remoteVault={remoteVault}>
-        <WalletApp />
+        <WalletApp
+          onExpand={openInTab}
+          onOpenSidePanel={onOpenSidePanel}
+          routeOnboardingToExpand
+        />
       </WalletProvider>
     </StrictMode>,
   );

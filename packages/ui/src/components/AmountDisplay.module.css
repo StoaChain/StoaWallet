@@ -1,0 +1,139 @@
+/*
+ * Amount rendering for STOA/UrStoa balances. The decimal value is laid out so the
+ * leading 3 fractional digits read at full size and the trailing 9 at half size —
+ * the visual hierarchy keeps the significant figures prominent while preserving
+ * full 12-decimal precision on screen.
+ */
+.amount {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-stoa-light, #f5f5f5);
+}
+
+.value {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/*
+ * Token color-coding: STOA amounts read in gold, UrStoa amounts in silver. The
+ * value (and its dimmed half-fraction) and the trailing glyph all inherit the
+ * denomination's hue, so the two tokens are distinguishable at a glance.
+ */
+.stoaColor .value {
+  color: var(--color-stoa-gold, #d4af37);
+}
+
+.stoaColor .smallFraction {
+  /* A dimmed shade of the same gold hue for the trailing 9 decimals. */
+  color: color-mix(in srgb, var(--color-stoa-gold, #d4af37) 65%, transparent);
+}
+
+.urstoaColor .value {
+  color: var(--color-stoa-silver, #c7cdd4);
+}
+
+.urstoaColor .smallFraction {
+  color: color-mix(in srgb, var(--color-stoa-silver, #c7cdd4) 65%, transparent);
+}
+
+/* The trailing 9 fractional digits at half size — visually subordinate to the
+ * integer + first 3 decimals, but still on screen at full precision. */
+.smallFraction {
+  font-size: 0.5em;
+  color: var(--color-stoa-slate, #9aa6b2);
+}
+
+/* An unknown/failed read: a distinct dash, never a misleading "0". */
+.unknown {
+  font-weight: 600;
+  color: var(--color-stoa-slate, #9aa6b2);
+}
+
+/*
+ * The trailing token glyph. Its size matches the BALANCE NUMBER height (not a
+ * subordinate fraction size), so the mark reads as part of the figure. The hero
+ * / sub variants mirror the `.hero .value` / `.sub .value` font-sizes; the value
+ * color already cascades to the glyph via the token-color class above, but the
+ * TokenGlyph sets its own inline color, so the size is what these classes pin.
+ */
+.glyph {
+  font-size: 0.8em;
+}
+
+.glyphHero {
+  font-size: 32px;
+  line-height: 1.1;
+}
+
+.glyphSub {
+  font-size: 16px;
+  line-height: 1.1;
+}
+
+/*
+ * Hero is a 2-ROW stack: the bounded main line — `{int},{first3}` + the glyph at
+ * the number height — on top (so the glyph never exits the card), and the trailing
+ * 9 decimals (gold, grouped 3-by-3) on a line BENEATH. `alignRight` flushes both
+ * rows to the right so the balance reads as a right-aligned money column.
+ */
+.hero {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.hero.alignRight {
+  align-items: flex-end;
+}
+
+.heroMain {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+/* The trailing 9 decimals beneath the hero number: in the token color (gold for
+ * STOA / silver for UrStoa, NOT dimmed), grouped 3-by-3 for legibility. */
+.beneathFraction {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.stoaColor .beneathFraction {
+  color: var(--color-stoa-gold, #d4af37);
+}
+
+.urstoaColor .beneathFraction {
+  color: var(--color-stoa-silver, #c7cdd4);
+}
+
+/* Alignment hooks (the meaningful rule is `.hero.alignRight` above; the sub size
+ * is a single line that the StoaTab column right-aligns as a whole). */
+.alignLeft {
+}
+
+.alignRight {
+}
+
+/* The large all-chain sum. */
+.hero .value {
+  font-size: 32px;
+  line-height: 1.1;
+}
+
+.hero .unknown {
+  font-size: 28px;
+}
+
+/* The smaller per-chain / per-wallet line. */
+.sub .value {
+  font-size: 16px;
+}
+
+.sub .unknown {
+  font-size: 16px;
+}

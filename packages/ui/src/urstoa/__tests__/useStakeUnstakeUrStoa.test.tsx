@@ -100,7 +100,7 @@ describe('useStakeUnstakeUrStoa', () => {
     });
 
     // The seam was invoked once with PUBLIC params only: the payment-key address
-    // and the amount formatted to the 24-decimal Pact scale (never the raw "12.5").
+    // and the amount formatted via the SDK Pact formatter at UrStoa's 3-decimal scale.
     expect(urstoaStake).toHaveBeenCalledTimes(1);
     const call = (urstoaStake as ReturnType<typeof vi.fn>).mock.calls[0][0] as {
       paymentKeyAddress: string;

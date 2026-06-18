@@ -1,5 +1,3 @@
-import { mayComeWithDeimal } from '@stoachain/stoa-core/pact';
-
 /**
  * The on-chain vault account that holds the total staked UrStoa. `getVaultTotal`
  * reads this account's UrStoa balance; T12.7's last-staker floor compares a
@@ -9,37 +7,49 @@ import { mayComeWithDeimal } from '@stoachain/stoa-core/pact';
 export const VAULT_ADDRESS = 'c:GjYbBFM0vxMs5FcmnFUW-LFoycd3Ef8wuP28vR6FG3k';
 
 /**
- * The injectable read seam over the two `@stoachain/ouronet-core` UrStoa reads,
- * so tests run fully off-network and the wrapper never re-implements the chain
- * call. The live default (see `reads.live.ts`) lazily wires the real SDK reads,
- * which resolve their endpoint through the active-node config — so a custom node
- * (Phase 10 `configureNode`/`setNodeConfig`) is honored without this wrapper
- * hardcoding any node.
+ * The injectable read seam over the UrStoa on-chain reads, so tests run fully
+ * off-network and the wrapper never re-implements the chain call. The live
+ * default (see `reads.live.ts`) wires the real reads, which resolve their
+ * endpoint through the active-node config — so a custom node (Phase 10
+ * `configureNode`/`setNodeConfig`) is honored without this wrapper hardcoding
+ * any node.
+ *
+ * The three holdings figures each have their OWN authoritative `coin.*` read,
+ * each returning a precision-preserving decimal STRING (or `null` on an
+ * RPC/non-success — an uncertainty signal the caller must NOT collapse to `0`):
+ *   - wallet    → `(coin.UR_UR|Balance <account>)`        — spendable UrStoa.
+ *   - vault     → `(coin.UR_URV|UserSupply <account>)`     — staked UrStoa.
+ *   - claimable → `(coin.URC_URV|ClaimableRewards <account>)` — STOA the account
+ *                 can collect from the vault.
  */
 export interface UrStoaReadDeps {
-  /** URC_0002_Primordials selector read for the account (chain 0). */
-  getPrimordials: (account: string) => Promise<unknown>;
+  /** Spendable wallet UrStoa: `(coin.UR_UR|Balance <account>)`. String, `null` on error. */
+  getWalletBalance: (account: string) => Promise<string | null>;
+  /** Staked vault UrStoa for the account: `(coin.UR_URV|UserSupply <account>)`. String, `null` on error. */
+  getVaultUserSupply: (account: string) => Promise<string | null>;
+  /** Claimable STOA rewards: `(coin.URC_URV|ClaimableRewards <account>)`. String, `null` on error. */
+  getClaimableRewards: (account: string) => Promise<string | null>;
   /**
-   * Native UrStoa balance for any account. Resolves `null` on non-existence OR
-   * RPC error — an uncertainty signal the caller must NOT collapse to `0`.
+   * The vault account's TOTAL staked UrStoa for the last-staker floor — reads
+   * `getUrStoaBalance(VAULT_ADDRESS)`. `null` (non-existence / RPC error) is the
+   * caller's uncertainty signal; it must NOT be coerced to `0`.
    */
   getUrStoaBalance: (account: string) => Promise<number | null>;
 }
 
 /**
- * The UrStoa holdings extracted from a Primordials row — ONLY the UrStoa-relevant
- * figures. `wrapped-balance`/`wrapped-id` are deliberately never surfaced.
- * Earnings are denominated in STOA and already `{decimal}`-unwrapped to a string.
+ * The UrStoa holdings for an account — the three figures the UrStoa tab shows.
+ * Each is a precision-preserving decimal STRING or `null` (the DISTINCT unknown
+ * state — a failed read of THAT figure, never coerced to `"0"`). UrStoa figures
+ * carry 3 decimals on-chain; the STOA-denominated `vaultEarnings` carries 12.
  */
 export interface UrStoaHoldings {
-  /** From `payment-key-balance` — the spendable wallet UrStoa balance. */
-  readonly walletBalance: string;
-  /** From `urstoa-vault-balance` — the user's staked UrStoa in the vault. */
-  readonly vaultBalance: string;
-  /** From `urstoa-vault-earnings` (`{decimal}`-unwrapped) — pending earnings in STOA. */
-  readonly vaultEarnings: string;
-  /** Optional `urstoa-vault-stoa-supply` when the row carries it. */
-  readonly vaultStoaSupply?: string;
+  /** From `coin.UR_UR|Balance` — the spendable wallet UrStoa balance. */
+  readonly walletBalance: string | null;
+  /** From `coin.UR_URV|UserSupply` — the account's staked UrStoa in the vault. */
+  readonly vaultBalance: string | null;
+  /** From `coin.URC_URV|ClaimableRewards` — collectable STOA the vault generated. */
+  readonly vaultEarnings: string | null;
 }
 
 /** Discriminated holdings result — success carries the typed shape, failure a reason. */
@@ -67,19 +77,15 @@ async function defaultDeps(): Promise<UrStoaReadDeps> {
   return makeLiveUrStoaReadDeps();
 }
 
-/** Unwrap a `{decimal}` envelope (or plain number/string) to a canonical string. */
-function asString(raw: unknown): string {
-  return String(mayComeWithDeimal(raw));
-}
-
 /**
- * Read an account's UrStoa holdings on chain 0 via `getPrimordials`, extracting
- * ONLY the UrStoa-relevant fields. All decimal figures are unwrapped via the SDK
- * `mayComeWithDeimal` helper (never `String()` of the raw `{decimal}` envelope,
- * which would yield `"[object Object]"` and break the Collect gate). A thrown
- * read or a `null` Primordials response (the SDK's Pact/network-error contract)
- * collapses to a discriminated `{ ok:false, reason:'read-failed' }` — never a
- * thrown Error. Emits no logs (the `k:` account is public but kept logging-free).
+ * Read an account's UrStoa holdings on chain 0 from the three authoritative
+ * `coin.*` reads concurrently: wallet (`UR_UR|Balance`), vault stake
+ * (`UR_URV|UserSupply`), and claimable STOA (`URC_URV|ClaimableRewards`). Each
+ * figure is independent — a single read that resolves `null` surfaces as `null`
+ * for THAT figure (the distinct unknown, never coerced to `"0"`) while the
+ * others stand. Only a thrown read collapses the whole call to a discriminated
+ * `{ ok:false, reason:'read-failed' }` — never a thrown Error. Emits no logs
+ * (the `k:` account is public but kept logging-free).
  */
 export async function getUrStoaHoldings(
   account: string,
@@ -88,22 +94,13 @@ export async function getUrStoaHoldings(
   const d = deps ?? (await defaultDeps());
 
   try {
-    const prims = await d.getPrimordials(account);
-    if (!prims || typeof prims !== 'object') {
-      return { ok: false, reason: 'read-failed' };
-    }
+    const [walletBalance, vaultBalance, vaultEarnings] = await Promise.all([
+      d.getWalletBalance(account),
+      d.getVaultUserSupply(account),
+      d.getClaimableRewards(account),
+    ]);
 
-    const row = prims as Record<string, unknown>;
-    const holdings: UrStoaHoldings = {
-      walletBalance: asString(row['payment-key-balance'] ?? '0'),
-      vaultBalance: asString(row['urstoa-vault-balance'] ?? '0'),
-      vaultEarnings: asString(row['urstoa-vault-earnings'] ?? '0'),
-      ...('urstoa-vault-stoa-supply' in row
-        ? { vaultStoaSupply: asString(row['urstoa-vault-stoa-supply']) }
-        : {}),
-    };
-
-    return { ok: true, holdings };
+    return { ok: true, holdings: { walletBalance, vaultBalance, vaultEarnings } };
   } catch {
     return { ok: false, reason: 'read-failed' };
   }

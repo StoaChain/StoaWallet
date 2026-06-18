@@ -53,6 +53,26 @@ describe('WalletContext', () => {
     expect(result.current.words.every((w) => w.length > 0)).toBe(true);
   });
 
+  it('exposes the active wallet summary (name + seedType) once a wallet is saved', async () => {
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => useWallet(), { wrapper });
+
+    // No wallet yet → no active wallet.
+    expect(result.current.activeWallet).toBeNull();
+
+    await act(async () => {
+      await result.current.startCreate();
+      await result.current.saveWallet(PASSWORD);
+    });
+
+    // After onboarding, the active wallet's plaintext metadata is readable
+    // without unlocking: a stable name and the seed type (koala for the default
+    // 24-word seed) so the header can render the seed name + the type chip.
+    expect(result.current.activeWallet).not.toBeNull();
+    expect(result.current.activeWallet?.name).toMatch(/\S/);
+    expect(result.current.activeWallet?.seedType).toBe('koala');
+  });
+
   it('saveWallet clears the in-memory words after a successful save', async () => {
     const { wrapper } = makeWrapper();
     const { result } = renderHook(() => useWallet(), { wrapper });

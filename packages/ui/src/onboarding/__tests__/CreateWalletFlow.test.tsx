@@ -153,6 +153,29 @@ describe('CreateWalletFlow', () => {
     expect(continueBtn).toBeEnabled();
   });
 
+  it('regenerates a fresh phrase and forces re-confirmation when "Generate new phrase" is clicked', async () => {
+    const { ctxRef } = setup();
+    await startCreate(ctxRef);
+
+    const firstPhrase = ctxRef.current!.words.join(' ');
+
+    // The user attests they backed up the (about-to-be-replaced) phrase.
+    await click(screen.getByRole('checkbox'));
+    await waitFor(() => expect(ctxRef.current!.hasConfirmedBackup).toBe(true));
+
+    await click(screen.getByRole('button', { name: /generate new phrase/i }));
+
+    // Re-rolling produces a genuinely different 24-word phrase and resets the
+    // backup attestation, so the user cannot advance on a stale confirmation of
+    // a phrase that no longer exists.
+    await waitFor(() => {
+      expect(ctxRef.current!.words).toHaveLength(24);
+      expect(ctxRef.current!.words.join(' ')).not.toBe(firstPhrase);
+    });
+    expect(ctxRef.current!.hasConfirmedBackup).toBe(false);
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
+  });
+
   it('on confirm advances to the password step and saveWallet completes the flow', async () => {
     const { ctxRef, onComplete } = setup();
     await startCreate(ctxRef);

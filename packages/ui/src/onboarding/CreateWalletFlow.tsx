@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 
+import { PasswordInput } from '../components/PasswordInput';
 import { useWallet, type WalletActionReason } from '../context/WalletContext';
 import styles from './CreateWalletFlow.module.css';
 
@@ -40,7 +41,7 @@ const REASON_COPY: Record<WalletActionReason, string> = {
 export function CreateWalletFlow({
   onComplete,
 }: CreateWalletFlowProps): React.ReactElement {
-  const { words, hasConfirmedBackup, setHasConfirmedBackup, saveWallet } =
+  const { words, hasConfirmedBackup, setHasConfirmedBackup, saveWallet, startCreate } =
     useWallet();
 
   const [step, setStep] = useState<Step>('backup');
@@ -96,27 +97,21 @@ export function CreateWalletFlow({
           This password encrypts your wallet on this device.
         </p>
 
-        <label className={styles.field}>
-          <span className={styles.label}>Password</span>
-          <input
-            className={styles.input}
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="new-password"
-          />
-        </label>
+        <PasswordInput
+          id="create-password"
+          label="Password"
+          value={password}
+          onChange={setPassword}
+          autoComplete="new-password"
+        />
 
-        <label className={styles.field}>
-          <span className={styles.label}>Confirm password</span>
-          <input
-            className={styles.input}
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            autoComplete="new-password"
-          />
-        </label>
+        <PasswordInput
+          id="create-confirm-password"
+          label="Confirm password"
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+          autoComplete="new-password"
+        />
 
         {error !== null && (
           <p className={styles.error} role="alert">
@@ -156,13 +151,26 @@ export function CreateWalletFlow({
         ))}
       </ol>
 
-      <button
-        className={styles.secondary}
-        type="button"
-        onClick={copyPhrase}
-      >
-        {copied ? 'Copied' : 'Copy phrase'}
-      </button>
+      <div className={styles.actionRow}>
+        <button
+          className={styles.secondary}
+          type="button"
+          onClick={copyPhrase}
+        >
+          {copied ? 'Copied' : 'Copy phrase'}
+        </button>
+
+        <button
+          className={styles.secondary}
+          type="button"
+          onClick={() => {
+            setCopied(false);
+            void startCreate();
+          }}
+        >
+          Generate new phrase
+        </button>
+      </div>
 
       <label className={styles.confirm}>
         <input

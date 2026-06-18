@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ACTIVE_ACCOUNT_KEY,
+  ADDRESS_BOOK_KEY,
+  AUTO_LOCK_KEY,
   CROSSCHAIN_INFLIGHT_KEY,
   DAPP_PERMISSIONS_KEY,
   DAPP_RATELIMIT_KEY,
@@ -43,6 +45,8 @@ describe('storageKeys', () => {
       MINER_AGGREGATION_KEY,
       DAPP_PERMISSIONS_KEY,
       DAPP_RATELIMIT_KEY,
+      ADDRESS_BOOK_KEY,
+      AUTO_LOCK_KEY,
     ];
     for (const key of namespaced) {
       expect(key.startsWith('stoawallet:')).toBe(true);
@@ -61,6 +65,8 @@ describe('storageKeys', () => {
         DAPP_PERMISSIONS_KEY,
         DAPP_RATELIMIT_KEY,
         NODE_PREFERENCE_KEY,
+        ADDRESS_BOOK_KEY,
+        AUTO_LOCK_KEY,
       ]),
     );
   });

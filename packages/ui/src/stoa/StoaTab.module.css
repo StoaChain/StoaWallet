@@ -1,0 +1,380 @@
+/*
+ * The Stoa tab: the native Stoa-coin home. A chain selector, the active-account
+ * line, the dual balance (all-chain hero + selected-chain sub), a refresh, and
+ * the Send/Receive/Cross-chain/Miner action row.
+ */
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/*
+ * The single MultiversX-style balance card (one rectangle): the account line,
+ * the collapsed chain selector, the dual balance, and the action row, all inside
+ * one bordered surface. Compact spacing so the bar + card fit the popup (~380×560)
+ * without scrolling.
+ */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  border-radius: 16px;
+  background: var(--color-stoa-surface, #1a1a1a);
+}
+
+/* The account line at the top of the card: index + truncated address + copy. */
+.cardAccount {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.accountIndex {
+  color: var(--color-stoa-gold, #d4af37);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/*
+ * The account address fills the remaining width and MIDDLE-truncates: the head
+ * (k: + gold first-3) + the muted middle ellipsize inside `.addrHead` (flex:1),
+ * while the gold last-3 (`.addrGold` tail) is pinned at the right edge. So the
+ * recognizable gold ends always show; only the middle collapses when it can't fit.
+ */
+.accountAddress {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  font-family: ui-monospace, 'SFMono-Regular', monospace;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+}
+
+.addrHead {
+  display: flex;
+  align-items: baseline;
+  flex: 1;
+  min-width: 0;
+}
+
+.addrPrefix {
+  flex-shrink: 0;
+  color: var(--color-stoa-slate, #9aa6b2);
+}
+
+.addrGold {
+  flex-shrink: 0;
+  color: var(--color-stoa-gold, #d4af37);
+}
+
+.addrMid {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-stoa-slate, #9aa6b2);
+}
+
+.copyButton {
+  background: transparent;
+  border: none;
+  color: var(--color-stoa-slate, #9aa6b2);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.copyButton:hover {
+  color: var(--color-stoa-gold, #d4af37);
+}
+
+/* The collapsed chain selector: a single-line toggle that opens an overlay
+ * dropdown (search + scrollable list) on click. */
+.chainSelector {
+  position: relative;
+}
+
+.chainToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: var(--color-stoa-dark, #0a0a0a);
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  color: var(--color-stoa-light, #f5f5f5);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chainToggle:hover {
+  border-color: var(--color-stoa-gold, #d4af37);
+}
+
+.chainChevron {
+  color: var(--color-stoa-slate, #9aa6b2);
+  font-size: 11px;
+}
+
+/* The opened dropdown: an overlay panel above the rest of the card. */
+.chainDropdown {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  border-radius: 10px;
+  background: var(--color-stoa-surface, #1a1a1a);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.chainSearch {
+  background: var(--color-stoa-surface, #1a1a1a);
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  color: var(--color-stoa-light, #f5f5f5);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.chainSearch::placeholder {
+  color: var(--color-stoa-slate, #9aa6b2);
+}
+
+.chainSearch:focus {
+  outline: none;
+  border-color: var(--color-stoa-gold, #d4af37);
+}
+
+/* The scrollable chain list inside the dropdown: a single vertical column so a
+ * long chain list stays navigable by scroll/search (future-proof for many chains). */
+.chainList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.chainOption {
+  width: 100%;
+  text-align: left;
+}
+
+.chainOption {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-stoa-light, #f5f5f5);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chainOption:hover {
+  border-color: var(--color-stoa-gold, #d4af37);
+  color: var(--color-stoa-gold, #d4af37);
+}
+
+.chainOptionActive {
+  border-color: var(--color-stoa-gold, #d4af37);
+  color: var(--color-stoa-gold, #d4af37);
+  background: rgba(212, 175, 55, 0.12);
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 12px 0 4px;
+}
+
+.heroLabel {
+  font-size: 11px;
+  color: var(--color-stoa-slate, #9aa6b2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.chainBalance {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.chainBalanceLabel {
+  font-size: 12px;
+  color: var(--color-stoa-slate, #9aa6b2);
+}
+
+.skeleton {
+  display: block;
+  width: 180px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--color-stoa-surface, #1a1a1a);
+}
+
+.skeletonSub {
+  display: block;
+  width: 120px;
+  height: 18px;
+  border-radius: 6px;
+  background: var(--color-stoa-surface, #1a1a1a);
+}
+
+/* A slim, low-profile full-width refresh badge beneath the balances (not a
+ * chunky button): small text + a ↻ glyph on a long rounded pill. */
+.refresh {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  color: var(--color-stoa-slate, #9aa6b2);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.refreshGlyph {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.refresh:hover:not(:disabled) {
+  color: var(--color-stoa-light, #f5f5f5);
+  border-color: var(--color-stoa-gold, #d4af37);
+}
+
+.refresh:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/*
+ * The action row: a horizontal strip of compact icon chips (MultiversX-style) —
+ * a gold-tinted rounded-square icon chip with the label beneath. Equal columns
+ * keep the strip balanced across the popup width.
+ */
+.actions {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--color-stoa-slate, #9aa6b2);
+  padding: 4px 0;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.actionChip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  background: rgba(212, 175, 55, 0.1);
+  color: var(--color-stoa-gold, #d4af37);
+}
+
+.actionLabel {
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.action:hover .actionChip {
+  border-color: var(--color-stoa-gold, #d4af37);
+  background: rgba(212, 175, 55, 0.18);
+}
+
+.action:hover {
+  color: var(--color-stoa-light, #f5f5f5);
+}
+
+.actionIcon {
+  display: block;
+}
+
+.subview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* The collapsible "continue an unfinished cross-chain transfer" section beneath
+   the cross-chain form. Collapsed by default; auto-open when routed a pending burn. */
+.continueSection {
+  border: 1px solid var(--color-stoa-border, #2d2d2d);
+  border-radius: 12px;
+  background: var(--color-stoa-surface, #1a1a1a);
+}
+
+.continueSummary {
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-stoa-gold, #d4af37);
+  cursor: pointer;
+  list-style: none;
+}
+
+.continueSummary::-webkit-details-marker {
+  display: none;
+}
+
+.continueSummary::before {
+  content: '▸ ';
+  color: var(--color-stoa-slate, #9aa6b2);
+}
+
+.continueSection[open] .continueSummary::before {
+  content: '▾ ';
+}
+
+.back {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--color-stoa-slate, #9aa6b2);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.back:hover {
+  color: var(--color-stoa-gold, #d4af37);
+}

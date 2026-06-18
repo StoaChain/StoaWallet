@@ -4,6 +4,8 @@ import {
 } from '@stoawallet/core';
 import { useEffect, useState, type ReactNode } from 'react';
 
+import { BrandSplash } from '../components/BrandSplash';
+import { PasswordInput } from '../components/PasswordInput';
 import {
   useWallet,
   type WalletActionReason,
@@ -138,56 +140,65 @@ export function UnlockScreen({
   }
 
   return (
-    <div className={styles.screen}>
-      <h1 className={styles.title}>Unlock wallet</h1>
+    <BrandSplash>
+      <div className={styles.screen}>
+        <h1 className={styles.title}>Unlock wallet</h1>
 
-      {sessionExpired && (
-        <p className={styles.notice} role="status">
-          Session expired — please unlock again.
-        </p>
-      )}
+        {sessionExpired && (
+          <p className={styles.notice} role="status">
+            Session expired — please unlock again.
+          </p>
+        )}
 
-      <div className={styles.field}>
-        <label className={styles.label} htmlFor="unlock-password">
-          Password
-        </label>
-        <input
-          id="unlock-password"
-          className={styles.input}
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-      </div>
-
-      {errorMessage !== null && (
-        <p className={styles.error} role="alert">
-          {errorMessage}
-        </p>
-      )}
-
-      <button
-        type="button"
-        className={styles.primary}
-        disabled={busy}
-        onClick={() => void handlePasswordUnlock()}
-      >
-        Unlock
-      </button>
-
-      {biometricAvailable && (
-        <button
-          type="button"
-          className={styles.biometric}
-          disabled={busy}
-          onClick={() => void handleBiometricUnlock()}
-          aria-label="Unlock with biometric"
+        {/* The field + Unlock button live in a form so pressing Enter in the
+            password field submits — a type="button" click handler would not fire
+            on Enter. The PasswordInput's own reveal toggle stays type="button" so
+            it never submits this form. */}
+        <form
+          className={styles.form}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handlePasswordUnlock();
+          }}
         >
-          <FingerprintIcon />
-          Use biometric
-        </button>
-      )}
-    </div>
+          <div className={styles.field}>
+            <PasswordInput
+              id="unlock-password"
+              label="Password"
+              autoComplete="current-password"
+              value={password}
+              onChange={setPassword}
+            />
+          </div>
+
+          {errorMessage !== null && (
+            <p className={styles.error} role="alert">
+              {errorMessage}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            className={styles.primary}
+            disabled={busy}
+          >
+            Unlock
+          </button>
+        </form>
+
+        {biometricAvailable && (
+          <button
+            type="button"
+            className={styles.biometric}
+            disabled={busy}
+            onClick={() => void handleBiometricUnlock()}
+            aria-label="Unlock with biometric"
+          >
+            <FingerprintIcon />
+            Use biometric
+          </button>
+        )}
+      </div>
+    </BrandSplash>
   );
 }

@@ -4,6 +4,8 @@ import {
   UnsupportedBiometricUnlock,
   UnsupportedQrScanner,
   WalletLockedError,
+  awaitSendConfirmation as coreAwaitSendConfirmation,
+  setAutoLockMinutes as coreSetAutoLockMinutes,
   collectUrStoa as coreCollectUrStoa,
   sendCrossChainStep0 as coreSendCrossChainStep0,
   sendSameChain as coreSendSameChain,
@@ -18,6 +20,7 @@ import {
   type RemoteSignTransaction,
   type ResolveForeignKeyResult,
   type ResolveSigningKeypairsResult,
+  type ConfirmSendResult,
   type SameChainDeps,
   type SameChainSendResult,
   type SendCrossChainStep0Deps,
@@ -70,6 +73,19 @@ export type OnboardingMode = 'create' | 'import';
 export interface ExistingWalletSummary {
   readonly id: string;
   readonly name: string;
+}
+
+/**
+ * The ACTIVE wallet's plaintext summary — its name + seed type, readable from
+ * the vault WITHOUT unlocking (the phrase is the only encrypted field). The
+ * header renders the seed name and a color-coded seed-type chip from this. The
+ * seed type widens beyond `koala` only when the wallet onboards other seed types
+ * (chainweaver/eckowallet/pure); today the single seed is always koala.
+ */
+export interface ActiveWalletSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly seedType: string;
 }
 
 /** A discriminated unlock/action outcome as it crosses the remote-vault seam. */
@@ -126,6 +142,71 @@ export interface RemoteVault {
     readonly op: 'stake' | 'unstake' | 'collect' | 'transfer';
     readonly params: unknown;
   }): Promise<RemoteUrStoaOutcome>;
+  /**
+   * The auto-lock session TICK: polled by the popup (~every 10s) to (a) keep the
+   * MV3 worker alive so the unlocked session survives form-filling, (b) drive the
+   * auto-lock (the host locks if the window elapsed), and (c) report the live
+   * expiry the popup counts down from. Read-only re: activity — it never re-arms.
+   */
+  getSession(): Promise<RemoteSessionStatus>;
+  /** Set the auto-lock window (minutes, clamped host-side); returns the value used. */
+  setAutoLock(minutes: number): Promise<number>;
+  /** Every seed (wallet) in the vault — public summary, for the Advanced tab. */
+  listWallets(): Promise<readonly RemoteWalletSummary[]>;
+  /** Every vault pure keypair — public summary, for the Advanced tab. */
+  listPureKeypairs(): Promise<readonly RemotePureKeypair[]>;
+  /** Switch the active seed (re-points signing in the host); ack/locked. */
+  setActiveWallet(walletId: string): Promise<RemoteUnlockResult>;
+  /** Derive a specific (non-consecutive) account index on a seed; returns it. */
+  addAccountAtIndex(walletId: string, index: number): Promise<RemoteUnlockResult>;
+  /** Remove a derived account from a seed (index #0 is rejected host-side); ack. */
+  removeAccount(walletId: string, index: number): Promise<RemoteUnlockResult>;
+  /** Rename a seed (non-secret metadata); ack/failure. */
+  renameWallet(walletId: string, name: string): Promise<RemoteUnlockResult>;
+  /**
+   * Import an Ouronet Codex export in the host: the codex password transits once,
+   * secrets are decrypted + re-sealed entirely in the host, only counts return.
+   */
+  importCodex(json: string, codexPassword: string): Promise<RemoteImportCodexResult>;
+}
+
+/** A public per-seed summary the Advanced tab renders (no secret material). */
+export interface RemoteWalletSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly seedType: string;
+  readonly isActive: boolean;
+  readonly activeAccountIndex: number;
+  readonly accounts: readonly RemoteAccount[];
+}
+
+/** A public pure-keypair summary the Advanced tab renders (no secret material). */
+export interface RemotePureKeypair {
+  readonly id: string;
+  readonly label?: string;
+  readonly publicKey: string;
+  readonly account: string;
+}
+
+/** The discriminated outcome of a Codex import — counts on success, reason on failure. */
+export type RemoteImportCodexResult =
+  | {
+      readonly ok: true;
+      readonly summary: {
+        readonly seedsImported: number;
+        readonly accountsImported: number;
+        readonly keysImported: number;
+        readonly skipped: number;
+      };
+    }
+  | { readonly ok: false; readonly reason: string };
+
+/** The live auto-lock snapshot the popup renders a countdown from. */
+export interface RemoteSessionStatus {
+  readonly unlocked: boolean;
+  /** Epoch-ms when the wallet auto-locks, or null when locked. */
+  readonly expiresAt: number | null;
+  readonly autoLockMinutes: number;
 }
 
 /**
@@ -335,6 +416,19 @@ export interface WalletContextValue {
   readonly sessionExpired: boolean;
 
   /**
+   * The REACTIVE background unlocked-state under MV3, or `null` when there is no
+   * background (the web/test/mobile path → defer to the local `activeAccount`).
+   * `null` until the first {@link refreshRemoteUnlocked} query resolves; then it
+   * holds the background session's live boolean, flipped `true` on a successful
+   * remote {@link unlock} and `false` on {@link lock} / {@link reportSessionLocked}.
+   *
+   * The lifecycle guard derives its `status` from THIS (not a one-shot mount query)
+   * so an in-popup unlock/lock re-renders the shell to HOME / re-unlock. Carries no
+   * key material — it is a single boolean across the seam.
+   */
+  readonly remoteUnlocked: boolean | null;
+
+  /**
    * Flag that the background session expired mid-session — called by an op (or the
    * lifecycle guard) when it observes a `locked` reason after the popup had a live
    * session. Idempotent; cleared by the next successful {@link unlock}.
@@ -360,6 +454,14 @@ export interface WalletContextValue {
   readonly hasExistingWallet: boolean;
   readonly existingWallets: ExistingWalletSummary[];
 
+  /**
+   * The active wallet's plaintext summary (name + seed type), or `null` when no
+   * wallet is stored. Sourced from the vault's `activeWalletId` pointer; refreshed
+   * on mount and after every save/import. The header reads the seed name + the
+   * seed-type chip from it.
+   */
+  readonly activeWallet: ActiveWalletSummary | null;
+
   startCreate(): Promise<void>;
   saveWallet(password: string): Promise<WalletActionResult>;
   importWallet(
@@ -370,6 +472,27 @@ export interface WalletContextValue {
   lock(): Promise<void>;
   addAccount(): Promise<WalletActionResult>;
   switchAccount(index: number): Promise<WalletActionResult>;
+  /** Set the selected account within a SPECIFIC seed (Advanced tab two-tier select). */
+  setSeedActiveAccount(walletId: string, index: number): Promise<WalletActionResult>;
+
+  /** Every seed (wallet) in the vault — public summaries for the Advanced tab. */
+  listWallets(): Promise<readonly RemoteWalletSummary[]>;
+  /** Every vault pure keypair — public summaries for the Advanced tab. */
+  listPureKeypairs(): Promise<readonly RemotePureKeypair[]>;
+  /** Switch the ACTIVE seed (re-points signing); mirrors the new selection. */
+  switchWallet(walletId: string): Promise<WalletActionResult>;
+  /** Derive a specific (non-consecutive) account index on a seed. */
+  addAccountAtIndex(walletId: string, index: number): Promise<WalletActionResult>;
+  /** Remove a derived account from a seed. Account #0 cannot be removed. */
+  removeAccount(walletId: string, index: number): Promise<WalletActionResult>;
+  /** Rename a seed (wallet); mirrors the updated summary. */
+  renameWallet(walletId: string, name: string): Promise<WalletActionResult>;
+  /**
+   * Import an Ouronet Codex export — decrypt at the codex password, re-seal at the
+   * wallet password, merge the seeds/keys. The decrypted secrets never reach the
+   * popup (the host does it). Returns the count summary or a discriminated reason.
+   */
+  importCodex(json: string, codexPassword: string): Promise<RemoteImportCodexResult>;
 
   /**
    * Sign + submit a same-chain transfer behind the keyring seam. Resolves the
@@ -379,6 +502,31 @@ export interface WalletContextValue {
    * touching core when no wallet is unlocked.
    */
   sendSameChain(params: ContextSendParams): Promise<ContextSendResult>;
+
+  /**
+   * Await the ON-CHAIN outcome of a submitted same-chain send (the request key
+   * carries only "submitted", not "mined"). A pure read — no key material — so it
+   * forwards straight to core `awaitSendConfirmation`. Returns a definitive
+   * confirmed/failed, or a `timeout` (submit landed, not yet observed — show the
+   * explorer, never resubmit).
+   */
+  awaitSendConfirmation(
+    requestKey: string,
+    chainId: string,
+  ): Promise<ConfirmSendResult>;
+
+  /**
+   * The auto-lock session tick (extension only). Polled by the auto-lock hook to
+   * keep the worker alive + drive the lock + read the countdown expiry. Resolves
+   * `null` on the web/mobile path (no background worker — no auto-lock window).
+   */
+  getSession(): Promise<RemoteSessionStatus | null>;
+  /**
+   * Set the auto-lock window in minutes. In the extension this updates the live
+   * background window; elsewhere it persists the preference. Returns the clamped
+   * minutes actually used.
+   */
+  setAutoLock(minutes: number): Promise<number>;
 
   /**
    * Build + sign + submit + confirm a cross-chain transfer's step-0 burn behind
@@ -643,7 +791,15 @@ export function WalletProvider({
   const [existingWallets, setExistingWallets] = useState<
     ExistingWalletSummary[]
   >([]);
+  const [activeWallet, setActiveWallet] = useState<ActiveWalletSummary | null>(
+    null,
+  );
   const [sessionExpired, setSessionExpired] = useState(false);
+  // The REACTIVE background unlocked-state (null until the first query resolves /
+  // no background). The lifecycle guard derives its status from this so an
+  // in-popup unlock/lock re-renders the shell. In LOCAL mode (no remoteVault) it
+  // stays null forever and the guard defers to `activeAccount`.
+  const [remoteUnlocked, setRemoteUnlocked] = useState<boolean | null>(null);
 
   // The in-progress phrase's authoritative copy. It is held in a ref (not just
   // state) so an action can read the freshly generated phrase WITHIN the same
@@ -686,6 +842,7 @@ export function WalletProvider({
     if (raw === null) {
       activeWalletIdRef.current = null;
       setExistingWallets([]);
+      setActiveWallet(null);
       return;
     }
     try {
@@ -694,11 +851,19 @@ export function WalletProvider({
       setExistingWallets(
         vault.wallets.map((w) => ({ id: w.id, name: w.name })),
       );
+      const active =
+        vault.wallets.find((w) => w.id === vault.activeWalletId) ?? null;
+      setActiveWallet(
+        active === null
+          ? null
+          : { id: active.id, name: active.name, seedType: active.seedType },
+      );
     } catch {
       // A vault blob that does not deserialize is surfaced through the next
       // unlock attempt's discriminated result, not by throwing during refresh.
       activeWalletIdRef.current = null;
       setExistingWallets([]);
+      setActiveWallet(null);
     }
   }, [storage]);
 
@@ -815,8 +980,10 @@ export function WalletProvider({
         if (result.ok) {
           await syncRemoteSelection();
           // A fresh unlock re-populates the background session: the prior expiry
-          // is resolved, so drop the "session expired" framing.
+          // is resolved, so drop the "session expired" framing and flip the
+          // reactive unlocked-state so the lifecycle guard re-renders to HOME.
           setSessionExpired(false);
+          setRemoteUnlocked(true);
         }
         return result;
       }
@@ -837,6 +1004,9 @@ export function WalletProvider({
     // mid-session expiry (the local manager's locked-state drives the UI directly).
     if (remoteVault === undefined) return;
     setSessionExpired(true);
+    // The background session is gone: flip the reactive unlocked-state so the
+    // guard re-derives to the re-unlock screen.
+    setRemoteUnlocked(false);
   }, [remoteVault]);
 
   const refreshRemoteUnlocked =
@@ -845,6 +1015,8 @@ export function WalletProvider({
       // that by returning null so the caller keeps the unchanged local branching.
       if (remoteVault === undefined) return null;
       const unlocked = await remoteVault.isUnlocked();
+      // Store the queried value as the reactive baseline the guard derives from.
+      setRemoteUnlocked(unlocked);
       if (unlocked) {
         // Mirror the background's live selection so HOME renders the active
         // account immediately on popup open without an explicit unlock step.
@@ -865,6 +1037,8 @@ export function WalletProvider({
       remoteActiveAccountRef.current = null;
       setActiveAccount(null);
       setActiveWalletAccounts([]);
+      // Flip the reactive unlocked-state so the guard re-derives to re-unlock.
+      setRemoteUnlocked(false);
       return;
     }
     await manager.lock();
@@ -913,6 +1087,156 @@ export function WalletProvider({
         return { ok: true };
       } catch (error) {
         return { ok: false, reason: reasonForActionError(error) };
+      }
+    },
+    [manager, syncActiveSelection, remoteVault, syncRemoteSelection],
+  );
+
+  /**
+   * Set the selected account WITHIN a SPECIFIC seed, without changing which seed
+   * is active. The Advanced tab's two-tier selector uses this: each seed remembers
+   * its own selected account, and the account in SERVICE for operations is the
+   * active seed's selected account. Setting the active seed's account moves the
+   * operational selection; setting a non-active seed's account only updates that
+   * seed's own pointer (it becomes operational once that seed is made active).
+   */
+  const setSeedActiveAccount = useCallback(
+    async (walletId: string, index: number): Promise<WalletActionResult> => {
+      if (remoteVault !== undefined) {
+        const result = await remoteVault.setActiveAccount(walletId, index);
+        if (result.ok) await syncRemoteSelection();
+        return result;
+      }
+      try {
+        await manager.setActiveAccount(walletId, index);
+        syncActiveSelection();
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, reason: reasonForActionError(error) };
+      }
+    },
+    [manager, syncActiveSelection, remoteVault, syncRemoteSelection],
+  );
+
+  // ── Advanced / Codex (multi-seed) ──
+
+  const listWallets = useCallback(async (): Promise<
+    readonly RemoteWalletSummary[]
+  > => {
+    if (remoteVault !== undefined) return remoteVault.listWallets();
+    return manager.listWallets();
+  }, [manager, remoteVault]);
+
+  const listPureKeypairs = useCallback(async (): Promise<
+    readonly RemotePureKeypair[]
+  > => {
+    if (remoteVault !== undefined) return remoteVault.listPureKeypairs();
+    return manager.listPureKeypairs();
+  }, [manager, remoteVault]);
+
+  const switchWallet = useCallback(
+    async (walletId: string): Promise<WalletActionResult> => {
+      // Remote mode: switch the SEED in the background (which re-points signing),
+      // then mirror its authoritative selection — same discipline as switchAccount.
+      if (remoteVault !== undefined) {
+        const result = await remoteVault.setActiveWallet(walletId);
+        if (result.ok) {
+          // The active SEED is now `walletId` — re-point the ref so a subsequent
+          // `switchAccount` (which keys off it) targets THIS seed, not the prior
+          // one. `syncRemoteSelection` mirrors only the active account, not the id.
+          activeWalletIdRef.current = walletId;
+          await syncRemoteSelection();
+        }
+        return result;
+      }
+      try {
+        await manager.setActiveWallet(walletId);
+        activeWalletIdRef.current = walletId;
+        syncActiveSelection();
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, reason: reasonForActionError(error) };
+      }
+    },
+    [manager, syncActiveSelection, remoteVault, syncRemoteSelection],
+  );
+
+  const addAccountAtIndex = useCallback(
+    async (walletId: string, index: number): Promise<WalletActionResult> => {
+      if (remoteVault !== undefined) {
+        const result = await remoteVault.addAccountAtIndex(walletId, index);
+        if (result.ok) await syncRemoteSelection();
+        return result;
+      }
+      try {
+        await manager.addAccountAtIndex(walletId, index);
+        syncActiveSelection();
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, reason: reasonForActionError(error) };
+      }
+    },
+    [manager, syncActiveSelection, remoteVault, syncRemoteSelection],
+  );
+
+  const removeAccount = useCallback(
+    async (walletId: string, index: number): Promise<WalletActionResult> => {
+      if (remoteVault !== undefined) {
+        const result = await remoteVault.removeAccount(walletId, index);
+        if (result.ok) await syncRemoteSelection();
+        return result;
+      }
+      try {
+        await manager.removeAccount(walletId, index);
+        syncActiveSelection();
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, reason: reasonForActionError(error) };
+      }
+    },
+    [manager, syncActiveSelection, remoteVault, syncRemoteSelection],
+  );
+
+  const renameWallet = useCallback(
+    async (walletId: string, name: string): Promise<WalletActionResult> => {
+      if (remoteVault !== undefined) {
+        const result = await remoteVault.renameWallet(walletId, name);
+        if (result.ok) await syncRemoteSelection();
+        return result;
+      }
+      try {
+        await manager.renameWallet(walletId, name);
+        syncActiveSelection();
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, reason: reasonForActionError(error) };
+      }
+    },
+    [manager, syncActiveSelection, remoteVault, syncRemoteSelection],
+  );
+
+  const importCodex = useCallback(
+    async (
+      json: string,
+      codexPassword: string,
+    ): Promise<RemoteImportCodexResult> => {
+      if (remoteVault !== undefined) {
+        const result = await remoteVault.importCodex(json, codexPassword);
+        // A successful import added seeds; re-mirror the (unchanged active)
+        // selection so a freshly imported seed is visible to the switcher.
+        if (result.ok) await syncRemoteSelection();
+        return result;
+      }
+      try {
+        const outcome = await manager.importCodex(json, codexPassword);
+        if (outcome.ok) {
+          syncActiveSelection();
+          return { ok: true, summary: outcome.summary };
+        }
+        return { ok: false, reason: outcome.reason };
+      } catch {
+        // The only throw is a locked wallet (manager.importCodex requires unlock).
+        return { ok: false, reason: 'locked' };
       }
     },
     [manager, syncActiveSelection, remoteVault, syncRemoteSelection],
@@ -998,6 +1322,32 @@ export function WalletProvider({
       );
     },
     [manager, remoteVault],
+  );
+
+  const awaitSendConfirmation = useCallback(
+    (requestKey: string, chainId: string): Promise<ConfirmSendResult> =>
+      // A pure on-chain read (no key material) — forward straight to core. The
+      // live seam resolves the active node + failover itself.
+      coreAwaitSendConfirmation(requestKey, chainId),
+    [],
+  );
+
+  const getSession = useCallback(
+    async (): Promise<RemoteSessionStatus | null> =>
+      // Extension only: poll the background's auto-lock tick. No background (the
+      // web/mobile path) means no auto-lock window — resolve null so the UI hides
+      // the countdown there.
+      remoteVault !== undefined ? remoteVault.getSession() : null,
+    [remoteVault],
+  );
+
+  const setAutoLock = useCallback(
+    async (minutes: number): Promise<number> => {
+      if (remoteVault !== undefined) return remoteVault.setAutoLock(minutes);
+      // No background: just persist the preference (clamped) over storage.
+      return coreSetAutoLockMinutes(storage, minutes);
+    },
+    [remoteVault, storage],
   );
 
   const sendCrossChainStep0 = useCallback(
@@ -1394,11 +1744,13 @@ export function WalletProvider({
     setHasConfirmedBackup,
     activeAccount,
     sessionExpired,
+    remoteUnlocked,
     reportSessionLocked,
     refreshRemoteUnlocked,
     activeWalletAccounts,
     hasExistingWallet: existingWallets.length > 0,
     existingWallets,
+    activeWallet,
     startCreate,
     saveWallet,
     importWallet,
@@ -1406,7 +1758,18 @@ export function WalletProvider({
     lock,
     addAccount,
     switchAccount,
+    setSeedActiveAccount,
     sendSameChain,
+    awaitSendConfirmation,
+    getSession,
+    setAutoLock,
+    listWallets,
+    listPureKeypairs,
+    switchWallet,
+    addAccountAtIndex,
+    removeAccount,
+    renameWallet,
+    importCodex,
     sendCrossChainStep0,
     urstoaStake,
     urstoaUnstake,

@@ -46,8 +46,14 @@ export interface MinerRecoveryRoute {
  */
 export interface ChainEntry {
   readonly chainId: string;
-  /** Full-balance default from T11.1; the user may LOWER it via `setAmount`. */
+  /** Current sweep amount: the full-balance default, or a user-lowered override. */
   readonly amount: string;
+  /**
+   * The full pre-scanned balance — the MAX this source can sweep. The custom
+   * amount may be LOWERED to this but never raised above it; the view caps on it
+   * and the MAX control resets to it (even after a prior lower).
+   */
+  readonly max: string;
   readonly progress: MinerChainStage | 'idle';
   readonly requestKey?: string;
   readonly spvAttempt?: number;
@@ -405,6 +411,7 @@ export function useMinerAggregation(
       return {
         chainId: src.chainId,
         amount: amountOverrides[src.chainId] ?? src.amount,
+        max: src.amount,
         progress: overlay?.progress ?? 'idle',
         requestKey: overlay?.requestKey,
         spvAttempt: overlay?.spvAttempt,

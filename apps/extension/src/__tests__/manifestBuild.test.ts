@@ -87,9 +87,12 @@ describe('MV3 manifest production emit', () => {
     expect(joined).not.toContain('*://*/*');
   });
 
-  it('requests only storage and idle permissions (idle drives the auto-lock), never tabs/scripting/webRequest', () => {
+  it('requests only storage, idle and sidePanel permissions (idle drives the auto-lock; sidePanel opens the docked wallet panel), never tabs/scripting/webRequest', () => {
     const perms = manifest.permissions ?? [];
-    expect([...perms].sort()).toEqual(['idle', 'storage']);
+    // The least-privilege trio: storage (vault), idle (auto-lock), sidePanel (the
+    // wallet's own docked panel — grants no page read/inject). Exact-equality so a
+    // silently-added permission would fail here.
+    expect([...perms].sort()).toEqual(['idle', 'sidePanel', 'storage']);
     for (const dangerous of ['tabs', 'scripting', 'webRequest', 'webRequestBlocking']) {
       expect(perms).not.toContain(dangerous);
     }

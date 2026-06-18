@@ -1,18 +1,31 @@
+/* UnlockScreen — composed inside <BrandSplash>, so the gold-orb background +
+ * glowing logo + wordmark come from the splash. This module styles only the
+ * unlock card: the heading, the password field, the rounded-full gold Unlock
+ * button (hero-style glow), and the glass biometric affordance. */
+
 .screen {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding: 1.5rem;
-  background: var(--color-stoa-dark);
+  width: 100%;
   color: var(--color-stoa-light);
   font-family: var(--font-sans);
+  text-align: left;
 }
 
 .title {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
+  text-align: center;
   color: var(--color-stoa-light);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .field {
@@ -21,36 +34,28 @@
   gap: 0.5rem;
 }
 
-.label {
-  font-size: 0.8125rem;
-  color: var(--color-stoa-slate);
-}
-
-.input {
-  padding: 0.625rem 0.75rem;
-  border: 1px solid var(--color-stoa-border);
-  border-radius: 0.5rem;
-  background: var(--color-stoa-surface);
-  color: var(--color-stoa-light);
-  font-family: var(--font-sans);
-  font-size: 0.9375rem;
-}
-
-.input:focus {
-  outline: none;
-  border-color: var(--color-stoa-gold);
-}
-
+/* Gold-fill, near-black, rounded-full primary with the hero's gold glow. */
 .primary {
-  padding: 0.625rem 0.75rem;
+  padding: 0.75rem 1rem;
   border: none;
-  border-radius: 0.5rem;
+  border-radius: 999px;
   background: var(--color-stoa-gold);
   color: var(--color-stoa-dark);
   font-family: var(--font-sans);
   font-size: 0.9375rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.primary:hover:not(:disabled) {
+  background: #f5d76e;
+  transform: scale(1.03);
+  box-shadow: 0 0 30px rgba(212, 175, 55, 0.5);
 }
 
 .primary:disabled {
@@ -58,33 +63,49 @@
   cursor: default;
 }
 
+/* Glass secondary — subtle translucent surface, rounded-full, lighten on hover. */
 .biometric {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.625rem 0.75rem;
-  border: 1px solid var(--color-stoa-gold);
-  border-radius: 0.5rem;
-  background: transparent;
-  color: var(--color-stoa-gold);
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-stoa-light);
   font-family: var(--font-sans);
   font-size: 0.9375rem;
   font-weight: 600;
   cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.biometric:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.biometric:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .error {
+  margin: 0;
   font-size: 0.8125rem;
   color: var(--color-status-danger);
 }
 
 .notice {
   margin: 0;
-  padding: 0.5rem 0.625rem;
+  padding: 0.5rem 0.75rem;
   border: 1px solid var(--color-stoa-gold);
-  border-radius: 0.5rem;
-  background: var(--color-stoa-surface);
+  border-radius: 0.625rem;
+  background: rgba(212, 175, 55, 0.08);
   color: var(--color-stoa-gold);
   font-size: 0.8125rem;
+  text-align: center;
 }

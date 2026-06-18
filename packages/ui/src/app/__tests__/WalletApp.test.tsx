@@ -34,10 +34,14 @@ async function seedWallet(storage: InMemoryStorageAdapter, keyVault: InMemoryKey
   await manager.lock();
 }
 
-function renderApp(storage: InMemoryStorageAdapter, keyVault: InMemoryKeyVault) {
+function renderApp(
+  storage: InMemoryStorageAdapter,
+  keyVault: InMemoryKeyVault,
+  props?: { onExpand?: () => void; routeOnboardingToExpand?: boolean },
+) {
   return render(
     <WalletProvider storage={storage} keyVault={keyVault}>
-      <WalletApp />
+      <WalletApp {...props} />
     </WalletProvider>,
   );
 }
@@ -84,7 +88,7 @@ describe('WalletApp', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders the tabbed HOME with the balances tab when unlocked', async () => {
+  it('renders the HOME shell with the floating bottom nav (default Stoa) when unlocked', async () => {
     const storage = new InMemoryStorageAdapter();
     const keyVault = new InMemoryKeyVault();
     await seedWallet(storage, keyVault);
@@ -92,9 +96,11 @@ describe('WalletApp', () => {
     const { container } = renderApp(storage, keyVault);
 
     // Unlock through the live context so `activeAccount` becomes non-null and the
-    // shell flips to HOME — proving the unlocked branch shows the tab bar (with a
-    // Send/Receive/Cross-chain tab) rather than the unlock screen.
-    const unlockInput = await screen.findByLabelText(/password/i);
+    // shell flips to HOME — proving the unlocked branch shows the bottom-nav shell
+    // (the Stoa tab default) rather than the unlock screen.
+    const unlockInput = await screen.findByLabelText(/password/i, {
+      selector: 'input',
+    });
     await act(async () => {
       const input = unlockInput as HTMLInputElement;
       const setter = Object.getOwnPropertyDescriptor(
@@ -109,9 +115,116 @@ describe('WalletApp', () => {
       unlockButton.click();
     });
 
-    // HOME presents the tab navigation; the Send and Receive tabs are present.
-    expect(await screen.findByRole('tab', { name: /send/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /receive/i })).toBeInTheDocument();
+    // HOME presents the floating bottom nav with the Stoa + UrStoa destinations,
+    // and the Stoa tab is the default body.
+    expect(
+      await screen.findByRole('tab', { name: /^stoa$/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /urstoa/i })).toBeInTheDocument();
+    expect(screen.getByTestId('stoa-tab')).toBeInTheDocument();
     expect(container.querySelector('[role="tablist"]')).not.toBeNull();
+  });
+});
+
+/**
+ * The extension-popup expand seam. The MV3 action popup closes on focus-loss, so
+ * showing a 24-word phrase there is dangerous. The popup passes an `onExpand`
+ * callback (its `chrome.tabs.create`) + `routeOnboardingToExpand`; the shell then
+ * routes the seed-showing Create/Import flows into a full browser tab instead of
+ * running them inline. Mobile and the tab itself pass NEITHER prop, so the inline
+ * flows run unchanged — the shell stays `chrome.*`-free.
+ */
+describe('WalletApp expand seam', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('renders the expand control only when onExpand is provided', async () => {
+    const withProp = new InMemoryStorageAdapter();
+    await act(async () => {
+      renderApp(withProp, new InMemoryKeyVault(), { onExpand: () => {} });
+    });
+    // The popup passed onExpand → the open-in-tab affordance is offered, so the
+    // user can escape the closeable popup before any seed is shown.
+    expect(
+      screen.getByRole('button', { name: /open in tab/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('does NOT render the expand control when onExpand is absent (mobile/tab)', async () => {
+    const noProp = new InMemoryStorageAdapter();
+    await act(async () => {
+      renderApp(noProp, new InMemoryKeyVault());
+    });
+    // Mobile and the tab itself pass no callback — there is nothing to expand into,
+    // and the shared shell must stay free of any extension-only affordance.
+    expect(
+      screen.queryByRole('button', { name: /open in tab/i }),
+    ).toBeNull();
+  });
+
+  it('routes Create onboarding to onExpand instead of the inline seed flow when routing is on', async () => {
+    const storage = new InMemoryStorageAdapter();
+    const onExpand = vi.fn();
+
+    await act(async () => {
+      renderApp(storage, new InMemoryKeyVault(), {
+        onExpand,
+        routeOnboardingToExpand: true,
+      });
+    });
+
+    const createButton = screen.getByRole('tab', { name: /create new wallet/i });
+    await act(async () => {
+      createButton.click();
+    });
+
+    // Picking Create opens the tab (the safe full-page surface) — the 24-word
+    // backup grid must NOT render inside the closeable popup.
+    expect(onExpand).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole('heading', { name: /back up your recovery phrase/i }),
+    ).toBeNull();
+  });
+
+  it('routes Import onboarding to onExpand instead of the inline phrase entry when routing is on', async () => {
+    const storage = new InMemoryStorageAdapter();
+    const onExpand = vi.fn();
+
+    await act(async () => {
+      renderApp(storage, new InMemoryKeyVault(), {
+        onExpand,
+        routeOnboardingToExpand: true,
+      });
+    });
+
+    const importButton = screen.getByRole('tab', { name: /import existing/i });
+    await act(async () => {
+      importButton.click();
+    });
+
+    // Import also handles the 24-word phrase, so it routes to the tab too — the
+    // inline "Import a wallet" phrase-entry must NOT render in the popup.
+    expect(onExpand).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole('heading', { name: /import a wallet/i }),
+    ).toBeNull();
+  });
+
+  it('runs Create onboarding inline (no routing) when routeOnboardingToExpand is absent', async () => {
+    const storage = new InMemoryStorageAdapter();
+
+    await act(async () => {
+      renderApp(storage, new InMemoryKeyVault());
+    });
+
+    // Mobile + the tab: no routing prop → onboarding runs inline. The freshly
+    // generated 24-word backup grid renders on the same full-page surface, which
+    // is the safe place to show it.
+    expect(
+      await screen.findByRole('heading', { name: /back up your recovery phrase/i }),
+    ).toBeInTheDocument();
   });
 });
