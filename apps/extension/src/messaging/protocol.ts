@@ -126,6 +126,38 @@ export type UrStoaOpRequest =
   | { readonly type: 'urstoaOp'; readonly op: 'transfer'; readonly params: UrStoaTransferOpParams };
 
 /**
+ * Sign an arbitrary UTF-8 message with the ACTIVE account's key, in the
+ * background. Used by the Settings "Sign message" tool so a user can prove
+ * control of a Stoa address to an external service (e.g. a mining pool's
+ * payout-address verification). The background hashes blake2b256(message) and
+ * Ed25519-signs it — the same bytes a Kadena tx signs — so the result verifies
+ * with `verifySig(blake2b256(message), sig, pubKey)`. Secret-free response: only
+ * the public signature + pubkey come back.
+ */
+export interface SignMessageRequest {
+  readonly type: 'signMessage';
+  readonly message: string;
+  /** Forward key-search depth (indices per seed) for an address bound in the
+   *  message but not added as an account. Clamped 1..100 in the background. */
+  readonly scanDepth?: number;
+  /** Correlates the background's {@link SignProgress} pushes to this request. */
+  readonly progressId?: string;
+}
+
+/**
+ * A BROADCAST progress push (background → popup) for a long forward key-search,
+ * driving the determinate progress bar. NOT part of the request/response
+ * {@link Request}/{@link Response} unions — it is a fire-and-forget
+ * `chrome.runtime.sendMessage` the popup matches by `progressId`. Secret-free.
+ */
+export interface SignProgress {
+  readonly type: 'signProgress';
+  readonly progressId: string;
+  readonly scanned: number;
+  readonly total: number;
+}
+
+/**
  * REQUEST union: every message the popup sends the background. Each arm is
  * discriminated on `type` so the background switches exhaustively.
  */
@@ -149,7 +181,8 @@ export type Request =
   | { readonly type: 'renameWallet'; readonly walletId: string; readonly name: string }
   | { readonly type: 'importCodex'; readonly json: string; readonly codexPassword: string }
   | SignTxRequest
-  | UrStoaOpRequest;
+  | UrStoaOpRequest
+  | SignMessageRequest;
 
 /** The discriminant literal of every {@link Request} arm. */
 export type RequestType = Request['type'];
@@ -294,6 +327,15 @@ export type SignTxResponse =
   | Failure;
 
 /**
+ * signMessage success: the public Ed25519 signature (128-char hex) over
+ * blake2b256(message) plus the signing pubkey, so the consumer can verify it.
+ * Secret-free — the key was resolved + consumed in the worker.
+ */
+export type SignMessageResponse =
+  | { readonly ok: true; readonly signature: string; readonly publicKey: string }
+  | Failure;
+
+/**
  * The reasons an UrStoa op fails as it crosses the wire. The background maps the
  * core wrapper's discriminated failure verbatim (`gas-payer-rejected` /
  * `submit-failed` / `collect-failed` / `invalid-recipient`) plus `locked` for a
@@ -336,6 +378,7 @@ export type Response =
   | ListPureKeypairsResponse
   | ImportCodexResponse
   | SignTxResponse
+  | SignMessageResponse
   | UrStoaOpResponse;
 
 /** Maps a request `type` to the response shape the background returns for it. */
@@ -367,9 +410,11 @@ export type ResponseFor<T extends RequestType> = T extends 'isUnlocked'
           ? ListAccountsResponse
           : T extends 'signTx'
             ? SignTxResponse
-            : T extends 'urstoaOp'
-              ? UrStoaOpResponse
-              : never;
+            : T extends 'signMessage'
+              ? SignMessageResponse
+              : T extends 'urstoaOp'
+                ? UrStoaOpResponse
+                : never;
 
 // --- SECRET-FREE BOUNDARY (compile-time guard) -----------------------------
 

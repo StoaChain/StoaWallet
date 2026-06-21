@@ -97,6 +97,9 @@ function makeFakeVault(initialUnlocked: boolean): RemoteVault & {
         ? { ok: true, signed: {} }
         : { ok: false, reason: 'locked' };
     },
+    async signMessage() {
+      return { ok: true as const, signature: '00', publicKey: '00' };
+    },
     async urstoaExecute() {
       return unlocked
         ? { ok: true as const, requestKey: 'rk' }

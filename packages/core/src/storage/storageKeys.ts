@@ -51,6 +51,13 @@ export const ADDRESS_BOOK_KEY = 'stoawallet:address-book';
 export const AUTO_LOCK_KEY = 'stoawallet:auto-lock';
 
 /**
+ * Forward key-search depth — how many derivation indices the "sign a message"
+ * tool probes per seed to find an address the seed controls but hasn't added as
+ * an account. Non-secret config (a small integer).
+ */
+export const FORWARD_SEARCH_KEY = 'stoawallet:forward-search-depth';
+
+/**
  * Frozen map of every registered key. The distinctness invariant is asserted
  * over THIS object so a newly-added constant that is forgotten here is also
  * (deliberately) excluded from the guarantee — keeping the registry honest.
@@ -65,6 +72,7 @@ export const STORAGE_KEYS = {
   NODE_PREFERENCE_KEY,
   ADDRESS_BOOK_KEY,
   AUTO_LOCK_KEY,
+  FORWARD_SEARCH_KEY,
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

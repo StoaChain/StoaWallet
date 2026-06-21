@@ -2,6 +2,7 @@ import type {
   RemoteVault,
   RemoteUnlockResult,
   RemoteUrStoaOutcome,
+  RemoteSignMessageOutcome,
   RemoteWalletSummary,
   RemotePureKeypair,
   RemoteImportCodexResult,
@@ -14,6 +15,7 @@ import type {
   RequestType,
   ResponseFor,
   SignerSpec,
+  SignProgress,
   UrStoaOpRequest,
   WireAccount,
   WireCommand,
@@ -244,6 +246,60 @@ export class BackgroundKeyVaultProxy implements RemoteVault {
     }
     return { ok: false, reason: res.reason, detail: res.detail };
   }
+
+  /**
+   * Sign an arbitrary message with the active account's key (Settings tool). The
+   * worker resolves + consumes the keypair; only the public signature + pubkey
+   * cross back. Failures map to the same reason set the unlock UI branches on.
+   */
+  async signMessage(
+    message: string,
+    opts: {
+      readonly scanDepth?: number;
+      readonly onProgress?: (scanned: number, total: number) => void;
+    } = {},
+  ): Promise<RemoteSignMessageOutcome> {
+    const chrome = (globalThis as unknown as { chrome?: ChromeRuntime }).chrome;
+    // Subscribe to determinate-progress pushes for THIS request only (matched by
+    // a unique id), so a long forward key-search can drive the progress bar.
+    const progressId =
+      opts.onProgress !== undefined
+        ? `sign-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+        : undefined;
+    let listener: ((msg: unknown) => void) | undefined;
+    if (progressId !== undefined && chrome?.runtime?.onMessage?.addListener !== undefined) {
+      const onProgress = opts.onProgress;
+      listener = (msg: unknown): void => {
+        const m = msg as Partial<SignProgress>;
+        if (
+          m?.type === 'signProgress' &&
+          m.progressId === progressId &&
+          typeof m.scanned === 'number' &&
+          typeof m.total === 'number'
+        ) {
+          onProgress?.(m.scanned, m.total);
+        }
+      };
+      chrome.runtime.onMessage.addListener(listener);
+    }
+
+    try {
+      const res = await this.send({
+        type: 'signMessage',
+        message,
+        scanDepth: opts.scanDepth,
+        progressId,
+      });
+      if (res.ok && 'signature' in res) {
+        return { ok: true, signature: res.signature, publicKey: res.publicKey };
+      }
+      return { ok: false, reason: mapReason('reason' in res ? res.reason : 'locked') };
+    } finally {
+      if (listener !== undefined && chrome?.runtime?.onMessage?.removeListener !== undefined) {
+        chrome.runtime.onMessage.removeListener(listener);
+      }
+    }
+  }
 }
 
 /** The signTx outcome the popup surfaces: the signed public tx, or a failure. */
@@ -256,5 +312,9 @@ interface ChromeRuntime {
   readonly runtime?: {
     readonly id?: string;
     sendMessage?(message: unknown): Promise<unknown>;
+    readonly onMessage?: {
+      addListener(cb: (message: unknown) => void): void;
+      removeListener(cb: (message: unknown) => void): void;
+    };
   };
 }

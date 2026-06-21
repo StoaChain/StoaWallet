@@ -25,8 +25,19 @@ import type { IUnsignedCommand } from '@stoachain/kadena-stoic-legacy/types';
 // declares it), so the named export is typed locally; the runtime resolves it
 // from the `.cjs`.
 import * as cryptoUtils from '@stoachain/kadena-stoic-legacy/cryptography-utils';
+// Extended-key (chainweaver/ecko) WASM signer — same path universalSign uses.
+import { kadenaSign } from '@stoachain/kadena-stoic-legacy/hd-wallet/chainweaver';
 
 const hashCmd = (cryptoUtils as unknown as { hash: (str: string) => string }).hash;
+// Locally-typed cryptography-utils for the message-signing path (the build's ESM
+// `.d.ts` is empty; runtime resolves from `.cjs`). `sign` = Ed25519(blake2b256(msg)).
+const signEd25519 = (
+  cryptoUtils as unknown as {
+    sign: (msg: string, kp: { secretKey: string; publicKey: string }) => { sig?: string };
+  }
+).sign;
+const hashBin = (cryptoUtils as unknown as { hashBin: (str: string) => Uint8Array }).hashBin;
+const binToHex = (cryptoUtils as unknown as { binToHex: (a: Uint8Array) => string }).binToHex;
 
 import type { KeyVault } from '@stoawallet/core';
 
@@ -37,6 +48,8 @@ import {
   type Request,
   type Response,
   type SignTxRequest,
+  type SignMessageRequest,
+  type SignProgress,
   type UrStoaOpRequest,
   type UrStoaOpResponse,
   type WireAccount,
@@ -349,6 +362,89 @@ async function handleSignTx(
 }
 
 /**
+ * Sign an arbitrary message with the ACTIVE account's key (Settings "Sign
+ * message" tool). Produces `Ed25519(blake2b256(message))` as 128-char hex — the
+ * exact bytes a consumer verifies with `verifySig(blake2b256(message), sig, pk)`.
+ *
+ * Routes by seed type exactly like the SDK's universalSign: nacl `sign()` for
+ * koala/pure/foreign (the embedded 64-hex secret), and the hd-wallet WASM
+ * `kadenaSign` over the binary hash for chainweaver/ecko extended keys. The
+ * keypair is resolved + consumed HERE; only the public signature + pubkey return.
+ */
+async function handleSignMessage(
+  manager: KeyringManager,
+  request: SignMessageRequest,
+): Promise<Response> {
+  // If the message is BOUND to a specific k: address (e.g. a mining-pool payout
+  // challenge carries a `address: k:<hex>` line), sign with THAT address's key —
+  // searching every seed/pure key, not just the active account — so the signature
+  // verifies against the bound address. A generic message (no such line) signs
+  // with the active account. WalletLockedError → mapped to `locked` by the catch.
+  // Determinate-progress sink: broadcast each derivation tick to the popup,
+  // matched by progressId. Fire-and-forget — a closed popup (no receiver) just
+  // drops the update.
+  const { progressId, scanDepth } = request;
+  const onProgress =
+    progressId === undefined
+      ? undefined
+      : (scanned: number, total: number): void => {
+          const push: SignProgress = { type: 'signProgress', progressId, scanned, total };
+          try {
+            void chrome.runtime.sendMessage(push).catch(() => {});
+          } catch {
+            /* no receiver / context gone — drop the tick */
+          }
+        };
+
+  const bound = request.message.match(/address:\s*(k:[0-9a-f]{64})/i);
+  let kp;
+  if (bound !== null) {
+    const pubKey = bound[1].slice(2).toLowerCase();
+    kp = await manager.resolveSigningKeypairByPublicKey(pubKey, { scanLimit: scanDepth, onProgress });
+    if (kp === null) {
+      // The bound address's key is not in THIS device's codex.
+      return err('no-wallet');
+    }
+  } else {
+    const keypairs = await manager.resolveActiveSigningKeypairs();
+    kp = keypairs[0] ?? null;
+  }
+  if (kp === null || kp === undefined || kp.publicKey === undefined) {
+    return err('locked');
+  }
+
+  const isExtended =
+    (kp.seedType === 'chainweaver' || kp.seedType === 'eckowallet') &&
+    kp.encryptedSecretKey !== undefined &&
+    kp.password !== undefined;
+
+  let signature: string;
+  if (isExtended) {
+    // Mirror universalSign's chainweaver path: pass the BINARY blake2b256 hash;
+    // the compat kadenaSign's `Buffer.from(hash,'base64')` copies a Uint8Array
+    // as-is (the encoding arg is ignored), so the signed bytes are the hash.
+    const sigBuf = await kadenaSign(
+      kp.password as string,
+      hashBin(request.message) as unknown as string,
+      kp.encryptedSecretKey as never,
+    );
+    signature = binToHex(new Uint8Array(sigBuf));
+  } else {
+    const secretKey = kp.privateKey ?? kp.secretKey;
+    if (secretKey === undefined) {
+      return err('locked');
+    }
+    const out = signEd25519(request.message, { secretKey, publicKey: kp.publicKey });
+    if (out.sig === undefined) {
+      return err('locked');
+    }
+    signature = out.sig;
+  }
+
+  return ok({ signature, publicKey: kp.publicKey });
+}
+
+/**
  * Route a single trusted request to the manager and produce its response. Never
  * throws: every failure path returns a discriminated `{ok:false, reason}` so the
  * secure worker's only output across the wire is plain, secret-free data.
@@ -411,6 +507,12 @@ export async function routeRequest(
           return err('locked');
         }
         return await handleSignTx(manager, request, approvalTokens);
+
+      case 'signMessage':
+        if (!keyVault.isUnlocked()) {
+          return err('locked');
+        }
+        return await handleSignMessage(manager, request);
 
       case 'urstoaOp':
         // The keypair lives only here; a locked vault short-circuits before any

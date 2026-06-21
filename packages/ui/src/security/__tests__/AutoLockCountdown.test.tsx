@@ -47,6 +47,9 @@ function makeVault(expiresAt: number | null): RemoteVault & { lockCalls: number 
     async signTx() {
       return { ok: true as const, signed: {} };
     },
+    async signMessage() {
+      return { ok: true as const, signature: '00', publicKey: '00' };
+    },
     async urstoaExecute() {
       return { ok: true as const, requestKey: 'rk' };
     },

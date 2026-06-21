@@ -648,6 +648,106 @@ export class KeyringManager {
   }
 
   /**
+   * Re-derive the SIGN-READY keypair for a SPECIFIC public key (the embedded key
+   * of a `k:` address), searching every seed's derived accounts — NOT just the
+   * active one. This is what lets the "sign a message" tool prove control of an
+   * arbitrary payout address the codex holds (e.g. a mining-pool challenge bound
+   * to one worker's address), regardless of which account is currently active.
+   *
+   * Mirrors {@link resolveActiveSigningKeypairs}'s per-seed derivation (koala →
+   * raw nacl key, chainweaver/ecko → encrypted WASM key). Returns `null` when no
+   * seed holds that public key. Throws `WalletLockedError` when locked. Carries
+   * live key material — use inside the signing boundary only.
+   */
+  async resolveSigningKeypairByPublicKey(
+    publicKey: string,
+    opts: {
+      /**
+       * Forward-search depth: how many derivation indices (0..scanLimit-1) to
+       * probe per seed for an address a seed CONTROLS but hasn't added. Clamped
+       * 0..100. **0 (the default) = NO forward search** — resolve only from keys
+       * the wallet HOLDS (pure + added). Set > 0 only when the wallet-wide
+       * forward-search preference is enabled.
+       */
+      readonly scanLimit?: number;
+      /** Determinate-progress sink: called per derivation with (scanned, total). */
+      readonly onProgress?: (scanned: number, total: number) => void;
+    } = {},
+  ): Promise<SignableKeypair | null> {
+    if (this.unlocked === null) {
+      throw new WalletLockedError();
+    }
+    const vault = await this.requireVault();
+    const { password } = this.unlocked;
+    const unlockedWalletId = this.unlocked.walletId;
+    const unlockedMnemonic = this.unlocked.mnemonic;
+    const phraseFor = async (wallet: (typeof vault.wallets)[number]): Promise<string> =>
+      wallet.id === unlockedWalletId
+        ? unlockedMnemonic
+        : await decryptPhrase(wallet.encryptedPhrase, password);
+
+    // Shape a derived account into a SignableKeypair (koala → raw nacl key;
+    // chainweaver/ecko → encrypted WASM key), matching resolveActiveSigningKeypairs.
+    const toSignable = async (
+      derived: Awaited<ReturnType<typeof deriveAccount>>,
+      seedType: string,
+    ): Promise<SignableKeypair> => {
+      if (seedType === 'koala') {
+        const rawSecret = await kadenaDecrypt(password, derived.encryptedSecretKey);
+        const secretBytes =
+          rawSecret instanceof Uint8Array
+            ? rawSecret
+            : new Uint8Array(rawSecret as ArrayLike<number>);
+        return { publicKey: derived.publicKey, privateKey: binToHex(secretBytes), seedType: 'koala' };
+      }
+      return { publicKey: derived.publicKey, encryptedSecretKey: derived.encryptedSecretKey, password, seedType };
+    };
+
+    // ── Pass 1: keys the wallet HOLDS (always) — pure imports + added accounts.
+    const pure = pureKeypairsOf(vault).find((k) => k.publicKey === publicKey);
+    if (pure !== undefined) {
+      const privateKey = await smartDecrypt(pure.encryptedPrivateKey, password);
+      return { publicKey: pure.publicKey, privateKey, seedType: 'koala' };
+    }
+    for (const wallet of vault.wallets) {
+      const added = wallet.accounts.find((a) => a.publicKey === publicKey);
+      if (added === undefined) continue;
+      return toSignable(
+        await deriveAccount(await phraseFor(wallet), password, added.index, wallet.seedType),
+        wallet.seedType,
+      );
+    }
+
+    // ── Pass 2: ADVANCED forward search — probe unadded indices, ONLY when the
+    // wallet-wide preference enabled it (scanLimit > 0).
+    const scanLimit = Math.max(0, Math.min(100, Math.floor(opts.scanLimit ?? 0)));
+    if (scanLimit < 1) return null;
+
+    // Determinate-progress denominator: indices in [0, scanLimit) per seed that
+    // will actually be DERIVED (i.e. not already added), summed.
+    const total = vault.wallets.reduce((sum, wallet) => {
+      const addedInRange = wallet.accounts.filter((a) => a.index >= 0 && a.index < scanLimit).length;
+      return sum + (scanLimit - addedInRange);
+    }, 0);
+    let scanned = 0;
+
+    for (const wallet of vault.wallets) {
+      let mnemonic: string | null = null;
+      const phrase = async (): Promise<string> => (mnemonic ??= await phraseFor(wallet));
+      for (let index = 0; index < scanLimit; index++) {
+        if (wallet.accounts.some((a) => a.index === index)) continue;
+        const derived = await deriveAccount(await phrase(), password, index, wallet.seedType);
+        scanned += 1;
+        opts.onProgress?.(scanned, total);
+        if (derived.publicKey === publicKey) {
+          return toSignable(derived, wallet.seedType);
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
    * Build the public-key SET the wallet can currently sign for: every derived
    * `k:` account of the active wallet PLUS every accepted pure keypair in the
    * vault-global pool. This is the single source the advanced orchestrators

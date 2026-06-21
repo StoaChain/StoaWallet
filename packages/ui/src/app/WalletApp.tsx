@@ -10,6 +10,8 @@ import { BrandSplash } from '../components/BrandSplash';
 import { CreateWalletFlow } from '../onboarding/CreateWalletFlow';
 import { ImportWalletFlow } from '../onboarding/ImportWalletFlow';
 import { AutoLockSettings } from '../settings/AutoLockSettings';
+import { SignMessageSettings } from '../settings/SignMessageSettings';
+import { ForwardSearchSettings } from '../settings/ForwardSearchSettings';
 import { NodeSettings } from '../settings/NodeSettings';
 import { SettingsProvider } from '../settings/SettingsContext';
 import { AdvancedTab } from '../advanced/AdvancedTab';
@@ -485,6 +487,8 @@ function Home({ onSessionLocked, onExpand, onOpenSidePanel }: HomeProps): ReactN
         {dest === 'settings' && (
           <div className={styles.settingsStack}>
             <AutoLockSettings />
+            <SignMessageSettings />
+            <ForwardSearchSettings />
             <SettingsProvider storage={storage}>
               <NodeSettings />
             </SettingsProvider>

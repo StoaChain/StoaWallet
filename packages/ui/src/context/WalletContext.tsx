@@ -127,6 +127,17 @@ export interface RemoteVault {
     accountIndex?: number,
   ): Promise<RemoteSignOutcome>;
   /**
+   * Sign an arbitrary UTF-8 message with the key for the address the message is
+   * bound to (Settings "Sign message" tool). The host hashes blake2b256(message)
+   * and Ed25519-signs it, returning ONLY the public hex signature + signing
+   * pubkey — no key material crosses this surface. `scanDepth` sets the forward
+   * key-search depth; `onProgress(scanned,total)` drives a determinate bar.
+   */
+  signMessage(
+    message: string,
+    opts?: { scanDepth?: number; onProgress?: (scanned: number, total: number) => void },
+  ): Promise<RemoteSignMessageOutcome>;
+  /**
    * Run a full UrStoa write op (build+sign+submit) in the host (background). The
    * SDK `execute*UrStoa` executors bundle build+sign+submit around a LITERAL
    * keypair (no `signTransaction` seam), so for the extension the WHOLE op must run
@@ -231,6 +242,11 @@ export interface RemoteAccount {
 export type RemoteSignOutcome =
   | { readonly ok: true; readonly signed: unknown }
   | { readonly ok: false; readonly reason: string };
+
+/** signMessage outcome: the public hex signature + signing pubkey, or a failure. */
+export type RemoteSignMessageOutcome =
+  | { readonly ok: true; readonly signature: string; readonly publicKey: string }
+  | { readonly ok: false; readonly reason: WalletActionReason };
 
 /**
  * Why a discriminated action failed. `wrong-password`, `corrupt-envelope`,
@@ -555,6 +571,17 @@ export interface WalletContextValue {
   urstoaCollect(params: ContextUrStoaCollectParams): Promise<ContextUrStoaResult>;
   /** Native UrStoa transfer — public sender/receiver/amount only, no keypair. */
   urstoaTransfer(params: ContextUrStoaTransferParams): Promise<ContextUrStoaResult>;
+
+  /**
+   * Sign an arbitrary message with the active account's key (Settings "Sign
+   * message" tool). REMOTE mode (the extension popup) routes to the background,
+   * which resolves+consumes the key and returns only the public hex signature.
+   * LOCAL/web mode (no remoteVault) is not wired → returns `unknown`.
+   */
+  signMessage(
+    message: string,
+    opts?: { scanDepth?: number; onProgress?: (scanned: number, total: number) => void },
+  ): Promise<RemoteSignMessageOutcome>;
 
   /**
    * Resolve the active account's signers for a miner sweep through the keyring
@@ -1461,6 +1488,22 @@ export function WalletProvider({
   // single-signature seam to route back. The popup hooks pass PUBLIC params only;
   // no keypair ever crosses from the hook into these ops.
 
+  // Settings "Sign message" tool. REMOTE mode routes to the background (which
+  // resolves+consumes the key and returns only the public signature). LOCAL/web
+  // signing is not wired here (the feature is extension-first) → `unknown`.
+  const signMessage = useCallback(
+    async (
+      message: string,
+      opts?: { scanDepth?: number; onProgress?: (scanned: number, total: number) => void },
+    ): Promise<RemoteSignMessageOutcome> => {
+      if (remoteVault !== undefined) {
+        return remoteVault.signMessage(message, opts);
+      }
+      return { ok: false, reason: 'unknown' };
+    },
+    [remoteVault],
+  );
+
   const urstoaStake = useCallback(
     async (params: ContextUrStoaStakeParams): Promise<ContextUrStoaResult> => {
       if (remoteVault !== undefined) {
@@ -1775,6 +1818,7 @@ export function WalletProvider({
     urstoaUnstake,
     urstoaCollect,
     urstoaTransfer,
+    signMessage,
     resolveActiveMinerSigners,
     addAdvancedAccount,
     resolveForeignKey,

@@ -37,6 +37,7 @@ export {
   type RemoteUnlockResult,
   type RemoteAccount,
   type RemoteSignOutcome,
+  type RemoteSignMessageOutcome,
   type RemoteUrStoaOutcome,
   type RemoteWalletSummary,
   type RemotePureKeypair,

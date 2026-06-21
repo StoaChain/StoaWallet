@@ -111,6 +111,19 @@ export {
   DEFAULT_AUTO_LOCK_MINUTES,
 } from './autolock';
 
+// The wallet-wide forward key-search preference — plain config over storage.
+export {
+  getForwardSearchPref,
+  setForwardSearchPref,
+  clampForwardSearchDepth,
+  type ForwardSearchPref,
+  DEFAULT_FORWARD_SEARCH,
+  FORWARD_SEARCH_OPTIONS,
+  MIN_FORWARD_SEARCH_DEPTH,
+  MAX_FORWARD_SEARCH_DEPTH,
+  DEFAULT_FORWARD_SEARCH_DEPTH,
+} from './forwardsearch';
+
 // Codex import — map an Ouronet Codex export into the vault (pure, injected crypto).
 export {
   importCodex,
