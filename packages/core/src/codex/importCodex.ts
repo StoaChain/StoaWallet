@@ -210,9 +210,9 @@ export async function importCodex(
 
   const exp = asExport(parsed);
   if (exp === null) return { ok: false, reason: 'invalid-json' };
-  // The wire format is frozen at "1.2"; reject anything else loudly rather than
-  // mis-parsing a future/older shape.
-  if (exp.version !== '1.2') {
+  // The wire format is frozen at {"1.2", "1.3"}; reject anything else loudly rather
+  // than mis-parsing a future/older shape.
+  if (exp.version !== '1.2' && exp.version !== '1.3') {
     return { ok: false, reason: 'unsupported-version', version: exp.version };
   }
 
