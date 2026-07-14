@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@stoachain/kadena-stoic-legacy": "file:../../../StoaOuronet/stoa-js/packages/kadena-stoic-legacy",
-    "@stoachain/stoa-core": "file:../../../StoaOuronet/stoa-js/packages/stoa-core",
+    "@stoachain/kadena-stoic-legacy": "file:../../../../_infra/stoa-js/packages/kadena-stoic-legacy",
+    "@stoachain/stoa-core": "file:../../../../_infra/stoa-js/packages/stoa-core",
     "@stoawallet/core": "workspace:*",
     "@stoawallet/ui": "workspace:*",
     "react": "^19.0.0",

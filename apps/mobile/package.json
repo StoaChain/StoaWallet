@@ -8,7 +8,7 @@
     "@capacitor-mlkit/barcode-scanning": "8.1.0",
     "@capacitor/app": "8.1.0",
     "@capacitor/core": "8.4.0",
-    "@stoachain/kadena-stoic-legacy": "file:../../../StoaOuronet/stoa-js/packages/kadena-stoic-legacy",
+    "@stoachain/kadena-stoic-legacy": "file:../../../../_infra/stoa-js/packages/kadena-stoic-legacy",
     "@stoawallet/core": "workspace:*",
     "@stoawallet/ui": "workspace:*",
     "capacitor-secure-storage-plugin": "0.13.0",

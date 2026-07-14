@@ -16,10 +16,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@stoachain/kadena-stoic-legacy": "file:../../../StoaOuronet/stoa-js/packages/kadena-stoic-legacy",
-    "@stoachain/stoa-core": "file:../../../StoaOuronet/stoa-js/packages/stoa-core",
-    "@stoachain/ouronet-core": "file:../../../StoaOuronet/stoa-js/packages/ouronet-core",
-    "@stoachain/ouronet-codex": "file:../../../StoaOuronet/stoa-js/packages/ouronet-codex",
+    "@stoachain/kadena-stoic-legacy": "file:../../../../_infra/stoa-js/packages/kadena-stoic-legacy",
+    "@stoachain/stoa-core": "file:../../../../_infra/stoa-js/packages/stoa-core",
+    "@stoachain/ouronet-core": "file:../../../../_infra/stoa-js/packages/ouronet-core",
+    "@stoachain/ouronet-codex": "file:../../../../_infra/stoa-js/packages/ouronet-codex",
     "@noble/curves": "1.9.7",
     "@scure/bip39": "1.2.1",
     "ed25519-keygen": "0.4.8",
