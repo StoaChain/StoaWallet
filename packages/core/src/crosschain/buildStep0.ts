@@ -1,4 +1,4 @@
-import { buildCTransferAcross } from '@stoachain/ouronet-core/interactions/crossChainFunctions';
+import { buildCTransferAcross } from '@ouronet/ouronet-core/interactions/crossChainFunctions';
 
 import { formatStoaAmount } from '../send/buildTransferCode.js';
 

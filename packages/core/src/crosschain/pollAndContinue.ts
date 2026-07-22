@@ -41,7 +41,7 @@ export interface ContinuationTx {
 }
 
 /**
- * Injectable seam over the three `@stoachain/ouronet-core` cross-chain
+ * Injectable seam over the three `@ouronet/ouronet-core` cross-chain
  * primitives this orchestrator composes. Tests inject doubles to stay fully
  * off-network; the production default lazily wires the live SDK functions
  * (see `pollAndContinue.live.ts`). The orchestrator does NOT reimplement any

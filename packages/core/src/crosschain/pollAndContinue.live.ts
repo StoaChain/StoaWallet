@@ -2,7 +2,7 @@ import {
   pollSpvProof,
   buildContinuationTransaction,
   submitContinuation,
-} from '@stoachain/ouronet-core/interactions/crossChainFunctions';
+} from '@ouronet/ouronet-core/interactions/crossChainFunctions';
 
 import {
   defaultIsSigningTimeout,
@@ -12,7 +12,7 @@ import {
 
 /**
  * Live (node-backed) deps for `pollProofAndContinue`: thin adapters over the
- * `@stoachain/ouronet-core` cross-chain primitives. Constructed lazily behind
+ * `@ouronet/ouronet-core` cross-chain primitives. Constructed lazily behind
  * the orchestrator's dynamic import so the barrel-reachable orchestrator never
  * statically pulls the SDK transport in. We do NOT reimplement the primitives —
  * each dep just forwards to the SDK and narrows the `any` boundary to the

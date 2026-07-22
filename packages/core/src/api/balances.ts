@@ -1,5 +1,5 @@
 import { STOA_CHAINS } from '@stoachain/stoa-core/constants';
-import { getBalanceOnChain as sdkGetBalanceOnChain } from '@stoachain/ouronet-core/interactions/crossChainFunctions';
+import { getBalanceOnChain as sdkGetBalanceOnChain } from '@ouronet/ouronet-core/interactions/crossChainFunctions';
 
 /**
  * Per-chain balance result. `exists` is the absent-vs-zero discriminator: a

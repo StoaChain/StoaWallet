@@ -1,5 +1,5 @@
 import { anuToStoa, GAS_PRICE_MIN_ANU } from '@stoachain/stoa-core/gas';
-import { STOA_AUTONOMIC_OURONETGASSTATION } from '@stoachain/ouronet-core/constants';
+import { STOA_AUTONOMIC_OURONETGASSTATION } from '@ouronet/ouronet-core/constants';
 
 import type { SignableKeypair } from '../api/sign';
 import { buildTransferCode } from './buildTransferCode';

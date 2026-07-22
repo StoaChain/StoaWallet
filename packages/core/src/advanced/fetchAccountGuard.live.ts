@@ -18,7 +18,7 @@ import {
 import type { ChainId } from '@stoachain/kadena-stoic-legacy/types';
 import { anuToStoa, GAS_PRICE_MIN_ANU } from '@stoachain/stoa-core/gas';
 import { getActivePactUrl } from '@stoachain/stoa-core/network';
-import { STOA_AUTONOMIC_OURONETGASSTATION } from '@stoachain/ouronet-core/constants';
+import { STOA_AUTONOMIC_OURONETGASSTATION } from '@ouronet/ouronet-core/constants';
 
 import type { DirtyReadResult, GuardReadDeps } from './fetchAccountGuard';
 

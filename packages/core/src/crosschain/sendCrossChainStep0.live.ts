@@ -7,8 +7,8 @@ import {
   getBalanceOnChain,
   listenForCompletion,
   submitCrossChainTransfer,
-} from '@stoachain/ouronet-core/interactions/crossChainFunctions';
-import { STOA_AUTONOMIC_OURONETGASSTATION } from '@stoachain/ouronet-core/constants';
+} from '@ouronet/ouronet-core/interactions/crossChainFunctions';
+import { STOA_AUTONOMIC_OURONETGASSTATION } from '@ouronet/ouronet-core/constants';
 import { anuToStoa, GAS_PRICE_MIN_ANU } from '@stoachain/stoa-core/gas';
 import { extractKeysetFromGuard } from '@stoachain/stoa-core/guard';
 import { getActivePactUrl } from '@stoachain/stoa-core/network';

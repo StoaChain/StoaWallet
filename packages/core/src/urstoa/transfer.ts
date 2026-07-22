@@ -34,7 +34,7 @@ import {
   checkCoinAccountExists as sdkCheckCoinAccountExists,
   type ExecuteNativeUrStoaParams,
   type UrStoaKeypair,
-} from '@stoachain/ouronet-core/interactions/urStoaFunctions';
+} from '@ouronet/ouronet-core/interactions/urStoaFunctions';
 import { classifyAccount } from '../advanced/classifyAccount';
 
 /** A k:-account pubkey is exactly 64 hex chars (ED25519), anchored. */

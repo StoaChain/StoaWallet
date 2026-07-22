@@ -1,6 +1,6 @@
 /**
  * UrStoa sub-barrel — native UrStoa on-chain interaction wrappers (chain 0,
- * gasless). Thin compositions over `@stoachain/ouronet-core` that return
+ * gasless). Thin compositions over `@ouronet/ouronet-core` that return
  * discriminated results and never leak signing secrets. Browser-safe: each
  * module keeps its node-only SDK transport behind a lazily-imported default.
  */

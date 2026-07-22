@@ -1,4 +1,4 @@
-import { KADENA_NAMESPACE } from '@stoachain/ouronet-core/constants';
+import { KADENA_NAMESPACE } from '@ouronet/ouronet-core/constants';
 
 const MAX_FRACTION_DIGITS = 12;
 

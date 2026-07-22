@@ -41,7 +41,7 @@ export interface CollectUrStoaParams {
 
 /**
  * Injectable SDK seam. Tests pass doubles to stay fully off-network; the
- * production default lazily wires the node-active `@stoachain/ouronet-core`
+ * production default lazily wires the node-active `@ouronet/ouronet-core`
  * functions, keeping the live transport out of the browser barrel.
  */
 export interface CollectUrStoaDeps {
@@ -87,11 +87,11 @@ function scrub(detail: string, key: SecretBearing): string {
 
 /**
  * Resolve the live (node-backed) SDK deps lazily so the barrel-reachable wrapper
- * never statically imports the node-only `@stoachain/ouronet-core` transport.
+ * never statically imports the node-only `@ouronet/ouronet-core` transport.
  */
 async function defaultDeps(): Promise<CollectUrStoaDeps> {
   const { checkCoinAccountExists, executeCollectUrStoa } = await import(
-    '@stoachain/ouronet-core/interactions/urStoaFunctions'
+    '@ouronet/ouronet-core/interactions/urStoaFunctions'
   );
   return { checkCoinAccountExists, executeCollectUrStoa };
 }

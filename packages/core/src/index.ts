@@ -231,7 +231,7 @@ export {
 } from './miner';
 
 // UrStoa native interactions (chain 0, gasless): thin composition wrappers over
-// `@stoachain/ouronet-core`. The COLLECT wrapper probes coin-account existence
+// `@ouronet/ouronet-core`. The COLLECT wrapper probes coin-account existence
 // (null → conservative create-account variant) and submits via the executor,
 // returning a discriminated result that never logs/returns signing secrets.
 export {

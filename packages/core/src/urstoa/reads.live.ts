@@ -20,7 +20,7 @@
  * collapses to `null` — the distinct unknown the UI shows as a dash, never `0`.
  */
 import { pactRead } from '@stoachain/stoa-core/reads';
-import { getUrStoaBalance } from '@stoachain/ouronet-core/interactions/urStoaFunctions';
+import { getUrStoaBalance } from '@ouronet/ouronet-core/interactions/urStoaFunctions';
 
 import type { UrStoaReadDeps } from './reads';
 

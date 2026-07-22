@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { STOA_AUTONOMIC_OURONETGASSTATION } from '@stoachain/ouronet-core/constants';
+import { STOA_AUTONOMIC_OURONETGASSTATION } from '@ouronet/ouronet-core/constants';
 
 import { buildGaslessProbeTx, makeSignedLocalProbe } from '../buildProbe';
 

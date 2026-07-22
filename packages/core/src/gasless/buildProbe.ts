@@ -1,4 +1,4 @@
-import { STOA_AUTONOMIC_OURONETGASSTATION } from '@stoachain/ouronet-core/constants';
+import { STOA_AUTONOMIC_OURONETGASSTATION } from '@ouronet/ouronet-core/constants';
 import { selectCapsSigningKey } from '@stoachain/stoa-core/guard';
 import { getActivePactUrl } from '@stoachain/stoa-core/network';
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { KADENA_NAMESPACE } from '@stoachain/ouronet-core/constants';
+import { KADENA_NAMESPACE } from '@ouronet/ouronet-core/constants';
 
 import { buildTransferCode, formatStoaAmount } from '../buildTransferCode';
 

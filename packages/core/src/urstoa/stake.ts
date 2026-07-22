@@ -1,7 +1,7 @@
 import {
   executeStakeUrStoa as sdkExecuteStakeUrStoa,
   executeUnstakeUrStoa as sdkExecuteUnstakeUrStoa,
-} from '@stoachain/ouronet-core/interactions/urStoaFunctions';
+} from '@ouronet/ouronet-core/interactions/urStoaFunctions';
 import type { IKadenaKeypair } from '@stoachain/stoa-core/signing';
 
 /**
@@ -43,7 +43,7 @@ interface ExecutorResult {
 
 /**
  * Injectable SDK-executor seam. Tests inject doubles to stay fully off-network;
- * the production default is the real `@stoachain/ouronet-core` executor pair.
+ * the production default is the real `@ouronet/ouronet-core` executor pair.
  * The wrapper COMPOSES these executors (which own the pact build + caps) — it
  * does not re-implement the pact code.
  */

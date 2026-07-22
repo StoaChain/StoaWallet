@@ -121,7 +121,7 @@ function errorMessage(err: unknown): string {
  */
 async function defaultDeps(): Promise<ResumeDeps> {
   const cc = await import(
-    '@stoachain/ouronet-core/interactions/crossChainFunctions'
+    '@ouronet/ouronet-core/interactions/crossChainFunctions'
   );
   const { SigningError } = await import('@stoachain/stoa-core/errors');
   return {

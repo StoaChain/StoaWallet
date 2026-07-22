@@ -12,7 +12,7 @@
  * TIMEOUT-coded error — the orchestrator maps that to its `timeout` result (the
  * submit landed; the user checks the explorer, never re-sends).
  */
-import { listenForCompletion } from '@stoachain/ouronet-core/interactions/crossChainFunctions';
+import { listenForCompletion } from '@ouronet/ouronet-core/interactions/crossChainFunctions';
 
 import type { ConfirmSendDeps, ListenOutcome } from './confirmSend';
 
