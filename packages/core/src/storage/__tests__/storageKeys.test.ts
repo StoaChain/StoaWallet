@@ -7,6 +7,7 @@ import {
   CROSSCHAIN_INFLIGHT_KEY,
   DAPP_PERMISSIONS_KEY,
   DAPP_RATELIMIT_KEY,
+  FORWARD_SEARCH_KEY,
   MINER_AGGREGATION_KEY,
   NODE_PREFERENCE_KEY,
   STORAGE_KEYS,
@@ -47,6 +48,7 @@ describe('storageKeys', () => {
       DAPP_RATELIMIT_KEY,
       ADDRESS_BOOK_KEY,
       AUTO_LOCK_KEY,
+      FORWARD_SEARCH_KEY,
     ];
     for (const key of namespaced) {
       expect(key.startsWith('stoawallet:')).toBe(true);
@@ -67,6 +69,7 @@ describe('storageKeys', () => {
         NODE_PREFERENCE_KEY,
         ADDRESS_BOOK_KEY,
         AUTO_LOCK_KEY,
+        FORWARD_SEARCH_KEY,
       ]),
     );
   });
