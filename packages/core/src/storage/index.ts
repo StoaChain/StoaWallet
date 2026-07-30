@@ -24,6 +24,7 @@ export {
   DAPP_PERMISSIONS_KEY,
   DAPP_RATELIMIT_KEY,
   NODE_PREFERENCE_KEY,
+  ADVANCED_MODE_KEY,
   STORAGE_KEYS,
   type StorageKey,
 } from './storageKeys';

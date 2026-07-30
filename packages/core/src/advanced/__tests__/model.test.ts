@@ -103,7 +103,13 @@ describe('advanced vault serialization (backward-compatible extension)', () => {
     const restored = deserializeVault(serializeVault(vault));
 
     // Deep equality proves the new collections survive the round-trip in full.
-    expect(restored).toEqual(vault);
+    // `legacyWallet()` predates the `origin` field, so deserialization defaults
+    // it to 'seed' — the ONLY permitted difference. Everything else must match
+    // exactly, so a round-trip that corrupted any other field still fails here.
+    expect(restored).toEqual({
+      ...vault,
+      wallets: vault.wallets.map((w) => ({ ...w, origin: 'seed' as const })),
+    });
     // Mode is the load-bearing capability flag: it must not be lost or coerced.
     expect(restored.advancedAccounts?.[0].mode).toBe('watch-only');
     expect(restored.advancedAccounts?.[1].mode).toBe('send-capable');

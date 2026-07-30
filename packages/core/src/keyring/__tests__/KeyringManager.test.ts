@@ -161,6 +161,20 @@ describe('KeyringManager', () => {
     expect(manager.getActiveAccount()?.account).toBe(second.account.account);
   });
 
+  it("stamps origin: 'seed' AT REST on a wallet it onboards", async () => {
+    const { manager, storage } = makeManager();
+
+    await manager.createWallet(PASSWORD, { name: 'Mine' });
+
+    // Read the RAW blob, not the deserialized vault: `deserializeVault` defaults
+    // a missing origin to 'seed', so only the stored bytes prove the creation
+    // site stamped it. Advanced mode branches on this field (a seed wallet keeps
+    // the togglable mode, a codex one is forced on) — an unstamped wallet would
+    // depend on a read-time default to get the capability it was created with.
+    const vault = JSON.parse((await storage.get(VAULT_KEY)) as string);
+    expect(vault.wallets[0].origin).toBe('seed');
+  });
+
   it('importWallet rejects an invalid phrase with a distinct reason BEFORE touching the vault', async () => {
     const { manager, storage } = makeManager();
 

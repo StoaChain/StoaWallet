@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ACTIVE_ACCOUNT_KEY,
   ADDRESS_BOOK_KEY,
+  ADVANCED_MODE_KEY,
   AUTO_LOCK_KEY,
   CROSSCHAIN_INFLIGHT_KEY,
   DAPP_PERMISSIONS_KEY,
@@ -13,6 +14,10 @@ import {
   STORAGE_KEYS,
   VAULT_KEY,
 } from '../storageKeys';
+// Deliberately imported through the sub-barrel, not the module: the barrel is
+// the export surface consumers (and the root barrel's `export * from
+// './storage'`) actually see.
+import { ADVANCED_MODE_KEY as ADVANCED_MODE_KEY_VIA_BARREL } from '../index';
 
 /**
  * The storage-key registry is the single source of truth for every
@@ -49,6 +54,7 @@ describe('storageKeys', () => {
       ADDRESS_BOOK_KEY,
       AUTO_LOCK_KEY,
       FORWARD_SEARCH_KEY,
+      ADVANCED_MODE_KEY,
     ];
     for (const key of namespaced) {
       expect(key.startsWith('stoawallet:')).toBe(true);
@@ -70,7 +76,19 @@ describe('storageKeys', () => {
         ADDRESS_BOOK_KEY,
         AUTO_LOCK_KEY,
         FORWARD_SEARCH_KEY,
+        ADVANCED_MODE_KEY,
       ]),
     );
+  });
+
+  it('re-exports ADVANCED_MODE_KEY from the storage sub-barrel so consumers reach it without importing storageKeys directly', () => {
+    // The sub-barrel names its exports one by one rather than `export *`, so a
+    // key can be registered in STORAGE_KEYS yet still be unreachable from
+    // `@stoawallet/core` (whose root barrel re-exports THIS barrel) — that has
+    // already happened to three keys. The advanced-mode preference module reads
+    // and writes under this key, so an omitted re-export would have it persist
+    // under `undefined` instead of the registered key.
+    expect(ADVANCED_MODE_KEY_VIA_BARREL).toBe(ADVANCED_MODE_KEY);
+    expect(STORAGE_KEYS.ADVANCED_MODE_KEY).toBe(ADVANCED_MODE_KEY_VIA_BARREL);
   });
 });

@@ -58,6 +58,13 @@ export const AUTO_LOCK_KEY = 'stoawallet:auto-lock';
 export const FORWARD_SEARCH_KEY = 'stoawallet:forward-search-depth';
 
 /**
+ * Whether the Advanced tab's extra tooling is revealed. Non-secret config (a
+ * boolean) persisted so the toggle survives a popup close/reopen instead of
+ * resetting to off on every mount.
+ */
+export const ADVANCED_MODE_KEY = 'stoawallet:advanced-mode';
+
+/**
  * Frozen map of every registered key. The distinctness invariant is asserted
  * over THIS object so a newly-added constant that is forgotten here is also
  * (deliberately) excluded from the guarantee — keeping the registry honest.
@@ -73,6 +80,7 @@ export const STORAGE_KEYS = {
   ADDRESS_BOOK_KEY,
   AUTO_LOCK_KEY,
   FORWARD_SEARCH_KEY,
+  ADVANCED_MODE_KEY,
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

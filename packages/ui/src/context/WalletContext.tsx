@@ -5,6 +5,8 @@ import {
   UnsupportedQrScanner,
   WalletLockedError,
   awaitSendConfirmation as coreAwaitSendConfirmation,
+  getAdvancedMode as coreGetAdvancedMode,
+  setAdvancedMode as coreSetAdvancedMode,
   setAutoLockMinutes as coreSetAutoLockMinutes,
   collectUrStoa as coreCollectUrStoa,
   sendCrossChainStep0 as coreSendCrossChainStep0,
@@ -86,6 +88,13 @@ export interface ActiveWalletSummary {
   readonly id: string;
   readonly name: string;
   readonly seedType: string;
+  /**
+   * How this wallet was created. Drives the Advanced-mode policy: a `codex`
+   * wallet is unusable in the standard single-seed view, so advanced mode is
+   * FORCED for it, while a `seed` wallet keeps the toggle. Vaults written before
+   * the field existed read back as `seed`.
+   */
+  readonly origin: 'seed' | 'codex';
 }
 
 /** A discriminated unlock/action outcome as it crosses the remote-vault seam. */
@@ -478,6 +487,19 @@ export interface WalletContextValue {
    */
   readonly activeWallet: ActiveWalletSummary | null;
 
+  /**
+   * The persisted Advanced-mode preference (the Advanced tab's multi-seed view).
+   * Survives a popup reopen, unlike the local state it replaced.
+   */
+  readonly advancedMode: boolean;
+  /** Persist the Advanced-mode preference. */
+  setAdvancedMode(enabled: boolean): Promise<void>;
+  /**
+   * The active wallet's origin, or `'seed'` when no wallet is stored — the
+   * conservative default that leaves the toggle usable.
+   */
+  readonly activeWalletOrigin: 'seed' | 'codex';
+
   startCreate(): Promise<void>;
   saveWallet(password: string): Promise<WalletActionResult>;
   importWallet(
@@ -809,6 +831,7 @@ export function WalletProvider({
   );
 
   const [mode, setMode] = useState<OnboardingMode>('create');
+  const [advancedMode, setAdvancedModeState] = useState(false);
   const [words, setWordsState] = useState<string[]>([]);
   const [hasConfirmedBackup, setHasConfirmedBackup] = useState(false);
   const [activeAccount, setActiveAccount] = useState<StoredAccount | null>(null);
@@ -883,7 +906,14 @@ export function WalletProvider({
       setActiveWallet(
         active === null
           ? null
-          : { id: active.id, name: active.name, seedType: active.seedType },
+          : {
+              id: active.id,
+              name: active.name,
+              seedType: active.seedType,
+              // `deserializeVault` already defaults a legacy blob's absent
+              // origin; the coalesce keeps the optional at-rest type honest.
+              origin: active.origin ?? 'seed',
+            },
       );
     } catch {
       // A vault blob that does not deserialize is surfaced through the next
@@ -899,6 +929,28 @@ export function WalletProvider({
   useEffect(() => {
     void refreshFromStorage();
   }, [refreshFromStorage]);
+
+  // Load the persisted Advanced-mode preference. The read is degrade-safe in
+  // core (a corrupt blob resolves to OFF), so this can never wedge the tab; the
+  // `alive` guard keeps a late resolve from setting state after unmount.
+  useEffect(() => {
+    let alive = true;
+    void coreGetAdvancedMode(storage).then((enabled) => {
+      if (alive) setAdvancedModeState(enabled);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [storage]);
+
+  /** Persist the Advanced-mode preference, then mirror it into state. */
+  const setAdvancedMode = useCallback(
+    async (enabled: boolean): Promise<void> => {
+      await coreSetAdvancedMode(storage, enabled);
+      setAdvancedModeState(enabled);
+    },
+    [storage],
+  );
 
   // Clear the in-progress phrase on unmount — the final exit path. Combined with
   // the explicit clears in saveWallet (success AND error), the phrase never
@@ -1794,6 +1846,9 @@ export function WalletProvider({
     hasExistingWallet: existingWallets.length > 0,
     existingWallets,
     activeWallet,
+    advancedMode,
+    setAdvancedMode,
+    activeWalletOrigin: activeWallet?.origin ?? 'seed',
     startCreate,
     saveWallet,
     importWallet,

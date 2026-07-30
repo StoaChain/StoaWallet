@@ -360,9 +360,12 @@ export class KeyringManager {
    * re-seals them at the WALLET password (`encryptPhrase` / `smartEncrypt` "2" —
    * the SAME envelope the koala phrase + pasted pure keys already use, so signing
    * decrypts them identically), and APPENDS the new seeds/keys (idempotent —
-   * already-present public keys are skipped). The decrypted secrets never leave
-   * this method; only at-rest envelopes are persisted. Returns the discriminated
-   * import outcome (summary on success, secret-free reason on failure).
+   * already-present public keys are skipped). Every APPENDED seed is stamped
+   * `origin: 'codex'`; a same-seed MERGE keeps the existing wallet's origin, so a
+   * wallet the user created here stays `'seed'` after absorbing a codex. The
+   * decrypted secrets never leave this method; only at-rest envelopes are
+   * persisted. Returns the discriminated import outcome (summary on success,
+   * secret-free reason on failure).
    */
   async importCodex(
     json: string,
@@ -433,9 +436,18 @@ export class KeyringManager {
       };
     });
 
+    // ONLY the brand-new seeds are codex-origin. `mergedWallets` are wallets the
+    // user already had — their origin is whatever they were created as (a seed
+    // wallet that later absorbs a same-seed codex stays 'seed', keeping advanced
+    // mode togglable), so the merge above deliberately spreads it through.
+    const importedWallets = outcome.wallets.map((w) => ({
+      ...w,
+      origin: 'codex' as const,
+    }));
+
     const nextVault: Vault = {
       ...vault,
-      wallets: [...mergedWallets, ...outcome.wallets],
+      wallets: [...mergedWallets, ...importedWallets],
       pureKeypairs: [...pureKeypairsOf(vault), ...outcome.pureKeypairs],
     };
     await this.persist(nextVault);
@@ -920,6 +932,11 @@ export class KeyringManager {
       accounts,
       activeAccountIndex: 0,
       seedType: 'koala',
+      // Stamped EXPLICITLY at the creation site rather than left to
+      // `deserializeVault`'s read-time default: origin decides a capability
+      // (advanced mode is togglable for a seed wallet, forced on for a codex
+      // one), so it is recorded as what this wallet IS, not inferred later.
+      origin: 'seed',
       createdAt: new Date().toISOString(),
     };
 

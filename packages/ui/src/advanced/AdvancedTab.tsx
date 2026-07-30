@@ -66,9 +66,15 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
     renameWallet,
     importCodex,
     listPureKeypairs,
+    advancedMode,
+    setAdvancedMode,
+    activeWalletOrigin,
   } = useWallet();
 
-  const [advanced, setAdvanced] = useState(false);
+  // A codex wallet holds many seeds; the standard single-seed view cannot
+  // represent it, so advanced mode is FORCED rather than merely defaulted on.
+  const forcedAdvanced = activeWalletOrigin === 'codex';
+  const advanced = forcedAdvanced || advancedMode;
   const [wallets, setWallets] = useState<readonly RemoteWalletSummary[]>([]);
   const [pureKeys, setPureKeys] = useState<readonly RemotePureKeypair[]>([]);
   const [busy, setBusy] = useState(false);
@@ -148,6 +154,11 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
               ? 'Nothing new to import — those seeds/keys are already here.'
               : `Imported ${parts.join(', ')}.`,
           );
+          // The vault now holds codex seeds, so PERSIST advanced mode — the
+          // multi-seed view must survive the next popup open. A codex-ORIGIN
+          // wallet is forced on separately; this covers the seed-origin wallet
+          // that imported a codex later, and leaves its toggle usable.
+          await setAdvancedMode(true);
           await refresh();
         } else if (result.reason === 'locked') {
           onRequireUnlock?.();
@@ -157,7 +168,7 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
         setBusy(false);
       }
     },
-    [importCodex, refresh, onRequireUnlock],
+    [importCodex, refresh, onRequireUnlock, setAdvancedMode],
   );
 
   return (
@@ -170,7 +181,8 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
             type="checkbox"
             data-testid="advanced-mode-toggle"
             checked={advanced}
-            onChange={(e) => setAdvanced(e.target.checked)}
+            disabled={forcedAdvanced}
+            onChange={(e) => void setAdvancedMode(e.target.checked)}
           />
         </label>
       </header>

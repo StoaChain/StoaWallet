@@ -52,6 +52,12 @@ export {
 export { isPastedKeyFormat } from './pastedKey';
 
 export {
+  getAdvancedMode,
+  setAdvancedMode,
+  DEFAULT_ADVANCED_MODE,
+} from './advancedModePreference';
+
+export {
   transitionAdvancedAccount,
   findPureKeypairByPubkey,
   type AdvancedAccount,

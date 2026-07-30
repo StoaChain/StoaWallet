@@ -2,8 +2,17 @@ import {
   InMemoryKeyVault,
   InMemoryStorageAdapter,
 } from '@stoawallet/core/testing';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { getAdvancedMode, serializeVault, VAULT_KEY } from '@stoawallet/core';
 
 import {
   WalletProvider,
@@ -112,13 +121,46 @@ function makeVault(over: Partial<RemoteVault> = {}): RemoteVault & {
   return v;
 }
 
-function renderTab(vault: RemoteVault): void {
-  const storage = new InMemoryStorageAdapter();
+function renderTab(
+  vault: RemoteVault,
+  storage: InMemoryStorageAdapter = new InMemoryStorageAdapter(),
+): InMemoryStorageAdapter {
   const keyVault = new InMemoryKeyVault();
   render(
     <WalletProvider storage={storage} keyVault={keyVault} remoteVault={vault}>
       <AdvancedTab />
     </WalletProvider>,
+  );
+  return storage;
+}
+
+/**
+ * Seed a stored vault whose single wallet carries the given `origin`, so the
+ * provider's `refreshFromStorage` reports a real active wallet. Advanced mode is
+ * FORCED for a codex-origin wallet, so the origin must come from the vault the
+ * way production reads it — not from a test-only prop.
+ */
+async function seedVaultWithOrigin(
+  storage: InMemoryStorageAdapter,
+  origin: 'seed' | 'codex',
+): Promise<void> {
+  await storage.set(
+    VAULT_KEY,
+    serializeVault({
+      activeWalletId: 'wallet-1',
+      wallets: [
+        {
+          id: 'wallet-1',
+          name: 'Koala A',
+          encryptedPhrase: 'ENC::phrase' as never,
+          accounts: SEED_A.accounts,
+          activeAccountIndex: 0,
+          seedType: 'koala',
+          origin,
+          createdAt: '2026-06-14T00:00:00.000Z',
+        },
+      ],
+    }),
   );
 }
 
@@ -283,6 +325,94 @@ describe('AdvancedTab', () => {
     });
     await waitFor(() =>
       expect(screen.getByTestId('import-error')).toHaveTextContent(/Wrong codex password/i),
+    );
+  });
+
+  it('PERSISTS the Advanced toggle across a remount — reopening the popup must not silently drop the user back to the standard view', async () => {
+    const storage = new InMemoryStorageAdapter();
+    renderTab(makeVault(), storage);
+    await waitFor(() => screen.getByTestId('seed-wallet-1'));
+    expect(screen.getByTestId('advanced-mode-toggle')).not.toBeChecked();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('advanced-mode-toggle'));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('import-codex-panel')).toBeInTheDocument(),
+    );
+
+    // Remount against the SAME storage — this is what a popup reopen does.
+    cleanup();
+    renderTab(makeVault(), storage);
+    await waitFor(() =>
+      expect(screen.getByTestId('advanced-mode-toggle')).toBeChecked(),
+    );
+    expect(screen.getByTestId('seed-wallet-2')).toBeInTheDocument();
+  });
+
+  it('FORCES advanced on for a codex-origin wallet: checked, disabled, and a click cannot persist it off', async () => {
+    const storage = new InMemoryStorageAdapter();
+    await seedVaultWithOrigin(storage, 'codex');
+    renderTab(makeVault(), storage);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('advanced-mode-toggle')).toBeChecked(),
+    );
+    // A codex wallet is unusable in the standard single-seed view, so the escape
+    // hatch is removed rather than merely defaulted.
+    expect(screen.getByTestId('advanced-mode-toggle')).toBeDisabled();
+    expect(screen.getByTestId('import-codex-panel')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('advanced-mode-toggle'));
+    });
+    expect(screen.getByTestId('advanced-mode-toggle')).toBeChecked();
+    // Nothing was written that could turn it off on the next open.
+    expect(await getAdvancedMode(storage)).toBe(false);
+  });
+
+  it('auto-enables advanced after a codex import into a SEED-origin wallet, and leaves it togglable', async () => {
+    const storage = new InMemoryStorageAdapter();
+    await seedVaultWithOrigin(storage, 'seed');
+    renderTab(makeVault(), storage);
+    await waitFor(() => screen.getByTestId('seed-wallet-1'));
+
+    // A seed wallet starts in the standard view and keeps its escape hatch.
+    expect(screen.getByTestId('advanced-mode-toggle')).not.toBeChecked();
+    expect(screen.getByTestId('advanced-mode-toggle')).not.toBeDisabled();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('advanced-mode-toggle'));
+    });
+    const file = new File(['{}'], 'c.json');
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('codex-file'), { target: { files: [file] } });
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/codex password/i), {
+        target: { value: 'pw' },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('codex-import-submit'));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('advanced-notice')).toBeInTheDocument(),
+    );
+
+    // The import persisted advanced mode: it survives the reopen...
+    cleanup();
+    renderTab(makeVault(), storage);
+    await waitFor(() =>
+      expect(screen.getByTestId('advanced-mode-toggle')).toBeChecked(),
+    );
+    // ...but a seed-origin wallet keeps the escape hatch, unlike codex-origin.
+    expect(screen.getByTestId('advanced-mode-toggle')).not.toBeDisabled();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('advanced-mode-toggle'));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('advanced-mode-toggle')).not.toBeChecked(),
     );
   });
 });

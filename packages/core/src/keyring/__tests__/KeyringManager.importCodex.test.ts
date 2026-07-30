@@ -52,6 +52,31 @@ async function makeExportJson(): Promise<string> {
   });
 }
 
+/**
+ * A codex carrying the SAME seed as an already-present wallet (it shares that
+ * wallet's account #0 public key) plus one extra account — the input that drives
+ * the same-seed MERGE path rather than a brand-new-wallet append.
+ */
+async function makeSameSeedExportJson(pub0: string, pub1: string): Promise<string> {
+  return JSON.stringify({
+    version: '1.2',
+    kadenaWallets: [
+      {
+        id: 'codex-seed-same',
+        name: 'Ouronet Koala Seed',
+        seedType: 'koala',
+        // The merge path does not decrypt the secret.
+        secret: await smartEncrypt('unused for a merge', CODEX_PW, '2'),
+        accounts: [
+          { index: 0, publicKey: pub0, derivationPath: "m'/44'/626'/0'" },
+          { index: 1, publicKey: pub1, derivationPath: "m'/44'/626'/1'" },
+        ],
+      },
+    ],
+    pureKeypairs: [],
+  });
+}
+
 async function readVault(storage: InMemoryStorageAdapter): Promise<Vault> {
   const raw = await storage.get(VAULT_KEY);
   return deserializeVault(typeof raw === 'string' ? raw : new TextDecoder().decode(raw!));
@@ -88,6 +113,22 @@ describe('KeyringManager.importCodex', () => {
     );
     // The pure key was re-sealed too (decryptable with WALLET_PW).
     expect(vault.pureKeypairs?.[0].publicKey).toBe(PUB_PURE);
+  });
+
+  it("stamps origin: 'codex' on the brand-new wallet it appends, leaving the existing wallet 'seed'", async () => {
+    const { manager, storage } = makeManager();
+    await manager.createWallet(WALLET_PW, { name: 'My koala' });
+
+    await manager.importCodex(await makeExportJson(), CODEX_PW);
+
+    // Advanced mode is FORCED ON for a codex-origin wallet and only auto-on for
+    // a seed one, so an unstamped import (which reads back as the defaulted
+    // 'seed') would silently let the user turn advanced mode off on a wallet
+    // that must keep it. The pre-existing wallet must NOT be re-stamped: the
+    // origin is per-wallet, not a property of "a codex was imported here".
+    const vault = await readVault(storage);
+    expect(vault.wallets.find((w) => w.name === 'Codex Koala')?.origin).toBe('codex');
+    expect(vault.wallets.find((w) => w.name === 'My koala')?.origin).toBe('seed');
   });
 
   it('listPureKeypairs surfaces imported pure keys (id, label, publicKey, k: account) — no secret', async () => {
@@ -135,25 +176,11 @@ describe('KeyringManager.importCodex', () => {
     const pub1 = 'f'.repeat(64);
 
     // A codex carrying the SAME seed (shares #0's pubkey) with an extra account #1
-    // and the codex's own name. The merge path does not decrypt the secret.
-    const json = JSON.stringify({
-      version: '1.2',
-      kadenaWallets: [
-        {
-          id: 'codex-seed-same',
-          name: 'Ouronet Koala Seed',
-          seedType: 'koala',
-          secret: await smartEncrypt('unused for a merge', CODEX_PW, '2'),
-          accounts: [
-            { index: 0, publicKey: pub0, derivationPath: "m'/44'/626'/0'" },
-            { index: 1, publicKey: pub1, derivationPath: "m'/44'/626'/1'" },
-          ],
-        },
-      ],
-      pureKeypairs: [],
-    });
-
-    const outcome = await manager.importCodex(json, CODEX_PW);
+    // and the codex's own name.
+    const outcome = await manager.importCodex(
+      await makeSameSeedExportJson(pub0, pub1),
+      CODEX_PW,
+    );
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.summary).toMatchObject({ seedsImported: 0, accountsImported: 1 });
@@ -164,6 +191,24 @@ describe('KeyringManager.importCodex', () => {
     expect(wallets[0].name).toBe('Ouronet Koala Seed');
     expect(wallets[0].accounts.map((a) => a.index)).toEqual([0, 1]);
     expect(wallets[0].accounts[1].account).toBe(`k:${pub1}`);
+  });
+
+  it("leaves a MERGED-INTO wallet's origin as 'seed' — a merge is not a codex-origin wallet", async () => {
+    const { manager, storage } = makeManager();
+    const created = await manager.createWallet(WALLET_PW, { name: 'Wallet 1' });
+
+    await manager.importCodex(
+      await makeSameSeedExportJson(created.account.publicKey, 'f'.repeat(64)),
+      CODEX_PW,
+    );
+
+    // The user CREATED this seed here and merely fed it a codex of the same seed.
+    // Re-stamping it 'codex' would force advanced mode permanently on a wallet
+    // whose owner must stay able to turn it off (AC6), so the merge adopts the
+    // codex name but never its origin.
+    const vault = await readVault(storage);
+    expect(vault.wallets).toHaveLength(1); // merged, not appended
+    expect(vault.wallets[0].origin).toBe('seed');
   });
 
   it('rejects import when locked', async () => {

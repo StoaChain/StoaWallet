@@ -3,9 +3,12 @@
  *
  * This module is the persisted shape of the wallet and NOTHING else: no crypto,
  * no storage I/O. It defines the at-rest types and a lossless string<->Vault
- * round-trip. Encryption of the seed phrase and reading/writing the blob live
- * in sibling modules (`encryptAtRest.ts`, the storage layer); keeping this file
- * pure makes the serialization independently testable and side-effect free.
+ * round-trip, with ONE deliberate exception: a wallet stored without `origin`
+ * reads back as `'seed'` (see `DEFAULT_WALLET_ORIGIN`) — the default states what
+ * such a wallet already is rather than changing it. Encryption of the seed
+ * phrase and reading/writing the blob live in sibling modules
+ * (`encryptAtRest.ts`, the storage layer); keeping this file pure makes the
+ * serialization independently testable and side-effect free.
  *
  * SECURITY INVARIANT: no plaintext secret is representable here. `encryptedPhrase`
  * is a branded `EncryptedBlob` (a plaintext string is not assignable to it), and
@@ -39,6 +42,24 @@ export type SeedType = 'koala' | 'chainweaver' | 'eckowallet';
 
 /** The full set of valid seed types — the single source for runtime validation. */
 export const SEED_TYPES: readonly SeedType[] = ['koala', 'chainweaver', 'eckowallet'];
+
+/**
+ * How a wallet ENTERED the vault: onboarded from a seed phrase (created or
+ * restored here) or brought in wholesale by a Codex import. EXPLICIT because
+ * advanced mode branches on it — a codex-origin wallet has advanced mode forced
+ * on, a seed wallet only has it auto-enabled — so the distinction must be read,
+ * never inferred from the accounts.
+ */
+export type WalletOrigin = 'seed' | 'codex';
+
+/**
+ * Origin assumed for a wallet persisted BEFORE the field existed (no `origin`
+ * key at all). `'seed'` is the tolerant default: it grants the togglable
+ * advanced mode rather than the forced-on one, so a legacy wallet is never
+ * locked into a capability set it was not stamped with. No migration pass is
+ * needed — `deserializeVault` materializes it on read.
+ */
+const DEFAULT_WALLET_ORIGIN: WalletOrigin = 'seed';
 
 /**
  * A raw keypair pasted/imported directly into the vault, NOT derived from a
@@ -139,6 +160,12 @@ export interface StoredWallet {
   readonly accounts: readonly StoredAccount[];
   readonly activeAccountIndex: number;
   readonly seedType: SeedType;
+  /**
+   * How the wallet got here. OPTIONAL at rest for backward compatibility: blobs
+   * written before this field existed carry no such key, and `deserializeVault`
+   * reads them back as `DEFAULT_WALLET_ORIGIN` rather than rejecting them.
+   */
+  readonly origin?: WalletOrigin;
   readonly createdAt: string;
 }
 
@@ -204,6 +231,9 @@ function isStoredWallet(value: unknown): value is StoredWallet {
     w.accounts.every(isStoredAccount) &&
     typeof w.activeAccountIndex === 'number' &&
     SEED_TYPES.includes(w.seedType as SeedType) &&
+    // Absent is legal (legacy blob, defaulted on read); present-but-unknown is
+    // NOT — backward compat must not weaken validation of the new field.
+    (w.origin === undefined || w.origin === 'seed' || w.origin === 'codex') &&
     typeof w.createdAt === 'string'
   );
 }
@@ -270,12 +300,31 @@ function isVault(value: unknown): value is Vault {
 }
 
 /**
+ * Materialize the `origin` default on a wallet parsed from disk.
+ *
+ * Applied ONLY where the key is absent, so an explicit `'codex'` is never
+ * clobbered back to a seed wallet. Done here rather than left to consumers
+ * because `origin` decides a capability (advanced mode), and a `?? 'seed'`
+ * repeated at every read site is one forgotten fallback away from an
+ * `undefined` origin matching neither branch.
+ */
+function withDefaultedOrigin(wallet: StoredWallet): StoredWallet {
+  return wallet.origin === undefined
+    ? { ...wallet, origin: DEFAULT_WALLET_ORIGIN }
+    : wallet;
+}
+
+/**
  * Parse a persisted vault string back into a `Vault`.
  *
  * Rejects BOTH malformed JSON and structurally-valid JSON that is not a vault
  * shape with `CorruptVaultError` (never a bare `SyntaxError`, never a later
  * undefined-deref), so callers get one diagnosable error type for any
  * unusable blob.
+ *
+ * The ONE thing it does not return verbatim is a wallet without `origin`: that
+ * defaults to `'seed'` (see `withDefaultedOrigin`). Every other field — and the
+ * optional VAULT-level collections — comes back exactly as stored.
  */
 export function deserializeVault(raw: string): Vault {
   let parsed: unknown;
@@ -291,7 +340,7 @@ export function deserializeVault(raw: string): Vault {
     );
   }
 
-  return parsed;
+  return { ...parsed, wallets: parsed.wallets.map(withDefaultedOrigin) };
 }
 
 /**
@@ -299,7 +348,7 @@ export function deserializeVault(raw: string): Vault {
  *
  * The advanced collections are OPTIONAL on `Vault` so (de)serialization stays
  * LOSSLESS and backward compatible — a Phase-2-era blob has neither field and
- * round-trips byte-for-byte (no injected `[]` keys that would break equality).
+ * neither is ever injected on read (no `[]` keys that would break equality).
  * Consumers that want to iterate without a null check use these accessors, which
  * return `[]` for a legacy vault. This keeps "legacy blob -> empty collections"
  * a CONSUMER guarantee without rewriting the persisted shape.

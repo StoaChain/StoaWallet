@@ -42,9 +42,38 @@ function twoAccountWallet(): StoredWallet {
     ],
     activeAccountIndex: 1,
     seedType: 'koala',
+    origin: 'seed',
     createdAt: '2026-06-14T00:00:00.000Z',
   };
 }
+
+/**
+ * A vault blob EXACTLY as the build BEFORE `origin` existed wrote it: no wallet
+ * carries the key at all. Spelled out literally (not derived from the fixture)
+ * so it stays a faithful record of what is already on disk in installed wallets
+ * even as the model grows.
+ */
+const PRE_ORIGIN_VAULT = {
+  wallets: [
+    {
+      id: 'wallet-1',
+      name: 'Prime',
+      encryptedPhrase: 'ENC::seed-phrase-envelope',
+      accounts: [
+        {
+          index: 0,
+          publicKey: 'a'.repeat(64),
+          account: `k:${'a'.repeat(64)}`,
+          derivationPath: "m'/44'/626'/0'",
+        },
+      ],
+      activeAccountIndex: 0,
+      seedType: 'koala',
+      createdAt: '2026-06-14T00:00:00.000Z',
+    },
+  ],
+  activeWalletId: 'wallet-1',
+};
 
 describe('serializeVault / deserializeVault', () => {
   it('round-trips a two-account wallet losslessly so no derived account is dropped on reload', () => {
@@ -105,5 +134,57 @@ describe('serializeVault / deserializeVault', () => {
     // @ts-expect-error privateKey is structurally absent from StoredWallet's accounts.
     wallet.accounts[0].privateKey = 'x';
     expect(wallet.accounts[0].publicKey).toBe('a'.repeat(64));
+  });
+});
+
+/**
+ * `origin` records HOW a wallet entered the vault, and advanced mode branches on
+ * it (forced on for codex, merely auto-on for seed). Two failure modes matter:
+ * a vault already on disk — written before the field existed — must keep opening
+ * and must present as a seed wallet, and an origin the wallet does not
+ * understand must never be silently taken for one it does.
+ */
+describe('StoredWallet.origin', () => {
+  it('defaults a wallet with no origin key to "seed" so a vault written before the field existed still opens', () => {
+    const restored = deserializeVault(JSON.stringify(PRE_ORIGIN_VAULT));
+
+    expect(restored.wallets[0].origin).toBe('seed');
+    // Everything else the legacy blob carried survives untouched — the default
+    // is the ONLY difference, so an installed wallet loses no account.
+    expect(restored).toEqual({
+      ...PRE_ORIGIN_VAULT,
+      wallets: [{ ...PRE_ORIGIN_VAULT.wallets[0], origin: 'seed' }],
+    });
+    // The upgraded shape must survive being written back and re-read: the first
+    // save after the upgrade would otherwise persist a blob that no longer parses.
+    expect(deserializeVault(serializeVault(restored))).toEqual(restored);
+  });
+
+  it('round-trips origin "codex" unchanged so a codex-imported wallet is never downgraded to a seed wallet on reload', () => {
+    const vault: Vault = {
+      wallets: [{ ...twoAccountWallet(), origin: 'codex' }],
+      activeWalletId: 'wallet-1',
+    };
+
+    const restored = deserializeVault(serializeVault(vault));
+
+    // The `'seed'` default fills an ABSENT key only. Overwriting a stored
+    // `'codex'` would hand that wallet the seed capability set — advanced mode
+    // togglable off — on the next popup open.
+    expect(restored.wallets[0].origin).toBe('codex');
+    expect(restored).toEqual(vault);
+  });
+
+  it('rejects an origin that is neither "seed" nor "codex" with CorruptVaultError rather than defaulting it', () => {
+    const bogus = JSON.stringify({
+      ...PRE_ORIGIN_VAULT,
+      wallets: [{ ...PRE_ORIGIN_VAULT.wallets[0], origin: 'bogus' }],
+    });
+
+    // An unrecognized origin must NOT be waved through: the default applies to
+    // an ABSENT key only. Accepting it would leave a value that matches neither
+    // advanced-mode branch, so the corrupt-vault path (which offers recovery) is
+    // the honest answer.
+    expect(() => deserializeVault(bogus)).toThrow(CorruptVaultError);
   });
 });
