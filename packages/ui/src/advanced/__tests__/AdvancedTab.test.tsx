@@ -225,6 +225,11 @@ describe('AdvancedTab', () => {
     // The chainweaver seed shows its type chip + a "Use this seed" switch.
     expect(screen.getByTestId('seed-wallet-2')).toHaveTextContent(/Chainweaver/);
     expect(screen.getByTestId('use-seed-wallet-2')).toBeInTheDocument();
+    // The codex importer moved to the Backup sub-tab so the seed list, which
+    // grows without bound, is not sharing a scroll with it.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('advanced-subtab-backup'));
+    });
     expect(screen.getByTestId('import-codex-panel')).toBeInTheDocument();
   });
 
@@ -246,6 +251,9 @@ describe('AdvancedTab', () => {
     await waitFor(() => screen.getByTestId('seed-wallet-1'));
     await act(async () => {
       fireEvent.click(screen.getByTestId('advanced-mode-toggle'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('advanced-subtab-backup'));
     });
     const codexField = screen.getByTestId('codex-password-field');
     const field = within(codexField).getByLabelText(
@@ -281,6 +289,9 @@ describe('AdvancedTab', () => {
 
     const file = new File(['{"version":"1.2"}'], 'OuronetCodex.json', {
       type: 'application/json',
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('advanced-subtab-backup'));
     });
     await act(async () => {
       fireEvent.change(screen.getByTestId('codex-file'), {
@@ -321,6 +332,12 @@ describe('AdvancedTab', () => {
     });
     const file = new File(['{}'], 'c.json');
     await act(async () => {
+      fireEvent.click(screen.getByTestId('advanced-subtab-backup'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('advanced-subtab-backup'));
+    });
+    await act(async () => {
       fireEvent.change(screen.getByTestId('codex-file'), { target: { files: [file] } });
     });
     await act(async () => {
@@ -346,7 +363,7 @@ describe('AdvancedTab', () => {
       fireEvent.click(screen.getByTestId('advanced-mode-toggle'));
     });
     await waitFor(() =>
-      expect(screen.getByTestId('import-codex-panel')).toBeInTheDocument(),
+      expect(screen.getByTestId('seed-wallet-2')).toBeInTheDocument(),
     );
 
     // Remount against the SAME storage — this is what a popup reopen does.
@@ -369,7 +386,7 @@ describe('AdvancedTab', () => {
     // A codex wallet is unusable in the standard single-seed view, so the escape
     // hatch is removed rather than merely defaulted.
     expect(screen.getByTestId('advanced-mode-toggle')).toBeDisabled();
-    expect(screen.getByTestId('import-codex-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('seed-wallet-2')).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByTestId('advanced-mode-toggle'));
@@ -393,6 +410,12 @@ describe('AdvancedTab', () => {
       fireEvent.click(screen.getByTestId('advanced-mode-toggle'));
     });
     const file = new File(['{}'], 'c.json');
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('advanced-subtab-backup'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('advanced-subtab-backup'));
+    });
     await act(async () => {
       fireEvent.change(screen.getByTestId('codex-file'), { target: { files: [file] } });
     });
@@ -422,5 +445,85 @@ describe('AdvancedTab', () => {
     await waitFor(() =>
       expect(screen.getByTestId('advanced-mode-toggle')).not.toBeChecked(),
     );
+  });
+});
+
+describe('AdvancedTab — sub-tabs and collapsing', () => {
+  it('splits into Accounts & Seeds and Backup tabs, seeds shown first', async () => {
+    renderTab(makeVault());
+    await waitFor(() => screen.getByTestId('seed-wallet-1'));
+
+    expect(screen.getByTestId('advanced-subtab-seeds')).toBeInTheDocument();
+    expect(screen.getByTestId('advanced-subtab-backup')).toBeInTheDocument();
+    // Seeds is the landing tab; backup panels stay out of the way.
+    expect(screen.queryByTestId('export-wallet-panel')).toBeNull();
+  });
+
+  it('shows backup panels on the Backup tab and hides the seed list', async () => {
+    renderTab(makeVault());
+    await waitFor(() => screen.getByTestId('seed-wallet-1'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('advanced-subtab-backup'));
+    });
+
+    expect(screen.getByTestId('export-wallet-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('import-codex-panel')).toBeInTheDocument();
+    // The seed list is what made this tab too long to scroll.
+    expect(screen.queryByTestId('seed-wallet-1')).toBeNull();
+  });
+
+  it('reaches Backup WITHOUT advanced mode — every user must be able to back up', async () => {
+    renderTab(makeVault());
+    await waitFor(() => screen.getByTestId('seed-wallet-1'));
+    // Advanced is off by default for a seed wallet; backup must not be gated
+    // behind it, or most users could never export their keys.
+    expect(screen.getByTestId('advanced-mode-toggle')).not.toBeChecked();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('advanced-subtab-backup'));
+    });
+    expect(screen.getByTestId('export-wallet-panel')).toBeInTheDocument();
+  });
+
+  it('collapses and expands ALL seeds at once', async () => {
+    renderTab(makeVault());
+    await waitFor(() => screen.getByTestId('seed-wallet-1'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('advanced-mode-toggle'));
+    });
+    // Expanded by default: account rows are visible.
+    expect(screen.getByTestId('account-wallet-1-0')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('collapse-all-seeds'));
+    });
+    // Heads stay (so the user can still see WHICH seeds exist) but the long
+    // account lists go — that is the point of the control.
+    expect(screen.getByTestId('seed-wallet-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('account-wallet-1-0')).toBeNull();
+    expect(screen.queryByTestId('account-wallet-2-0')).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('expand-all-seeds'));
+    });
+    expect(screen.getByTestId('account-wallet-1-0')).toBeInTheDocument();
+    expect(screen.getByTestId('account-wallet-2-0')).toBeInTheDocument();
+  });
+
+  it('collapses ONE seed without touching the others', async () => {
+    renderTab(makeVault());
+    await waitFor(() => screen.getByTestId('seed-wallet-1'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('advanced-mode-toggle'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('seed-collapse-wallet-1'));
+    });
+
+    expect(screen.queryByTestId('account-wallet-1-0')).toBeNull();
+    // The other seed is unaffected — per-card state, not a global flag.
+    expect(screen.getByTestId('account-wallet-2-0')).toBeInTheDocument();
   });
 });

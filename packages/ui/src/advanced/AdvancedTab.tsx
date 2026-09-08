@@ -81,6 +81,23 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
   const [busy, setBusy] = useState(false);
   // Determinate codex-import progress: [done, total] items, or null when idle.
   const [codexProgress, setCodexProgress] = useState<readonly [number, number] | null>(null);
+  /** Which sub-tab is showing. Seeds first — backup is the occasional trip. */
+  const [subTab, setSubTab] = useState<'seeds' | 'backup'>('seeds');
+  /**
+   * Ids of seeds whose account list is collapsed. Tracked as the COLLAPSED set
+   * (not expanded) so a newly imported seed appears open by default rather than
+   * silently hidden.
+   */
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+
+  const toggleCollapsed = useCallback((id: string): void => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
   const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async (): Promise<void> => {
@@ -202,7 +219,38 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
         </p>
       )}
 
-      {!advanced ? (
+      {/* Two sub-tabs: the seed list grows without bound as accounts are added,
+          so backup lives beside it rather than below it. Backup is OUTSIDE the
+          advanced gate — every user must be able to export their keys. */}
+      <div className={styles.subTabs} role="tablist" aria-label="Advanced sections">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={subTab === 'seeds'}
+          data-testid="advanced-subtab-seeds"
+          className={`${styles.subTab} ${subTab === 'seeds' ? styles.subTabActive : ''}`}
+          onClick={() => setSubTab('seeds')}
+        >
+          Accounts &amp; Seeds
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={subTab === 'backup'}
+          data-testid="advanced-subtab-backup"
+          className={`${styles.subTab} ${subTab === 'backup' ? styles.subTabActive : ''}`}
+          onClick={() => setSubTab('backup')}
+        >
+          Backup
+        </button>
+      </div>
+
+      {subTab === 'backup' ? (
+        <div className={styles.advancedBody}>
+          <ImportCodexPanel busy={busy} progress={codexProgress} onImport={onImport} />
+          <ExportWalletPanel />
+        </div>
+      ) : !advanced ? (
         active === undefined ? (
           <p className={styles.empty}>No wallet yet.</p>
         ) : (
@@ -210,6 +258,8 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
             wallet={active}
             busy={busy}
             showSwitch={false}
+            collapsed={collapsed.has(active.id)}
+            onToggleCollapsed={() => toggleCollapsed(active.id)}
             onAddAccount={() => run(active.id, addAccount)}
             onAddAtIndex={(i) => run(active.id, () => addAccountAtIndex(active.id, i))}
             onUseSeed={() => undefined}
@@ -226,12 +276,32 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
             Every seed in this wallet. Switch the active seed, add accounts, or
             import an Ouronet Codex to bring in more seeds, accounts and keys.
           </p>
+          <div className={styles.bulkControls}>
+            <button
+              type="button"
+              className={styles.bulkButton}
+              data-testid="expand-all-seeds"
+              onClick={() => setCollapsed(new Set())}
+            >
+              Expand all
+            </button>
+            <button
+              type="button"
+              className={styles.bulkButton}
+              data-testid="collapse-all-seeds"
+              onClick={() => setCollapsed(new Set(wallets.map((w) => w.id)))}
+            >
+              Collapse all
+            </button>
+          </div>
           {wallets.map((w) => (
             <SeedCard
               key={w.id}
               wallet={w}
               busy={busy}
               showSwitch
+              collapsed={collapsed.has(w.id)}
+              onToggleCollapsed={() => toggleCollapsed(w.id)}
               onAddAccount={() => run(w.id, addAccount)}
               onAddAtIndex={(i) => run(w.id, () => addAccountAtIndex(w.id, i))}
               onUseSeed={() => run(w.id, async () => ({ ok: true }))}
@@ -243,8 +313,6 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
             />
           ))}
           {pureKeys.length > 0 && <PureKeysPanel keys={pureKeys} />}
-          <ImportCodexPanel busy={busy} progress={codexProgress} onImport={onImport} />
-          <ExportWalletPanel />
         </div>
       )}
     </section>
@@ -256,6 +324,8 @@ function SeedCard({
   wallet,
   busy,
   showSwitch,
+  collapsed,
+  onToggleCollapsed,
   onAddAccount,
   onAddAtIndex,
   onUseSeed,
@@ -266,6 +336,9 @@ function SeedCard({
   readonly wallet: RemoteWalletSummary;
   readonly busy: boolean;
   readonly showSwitch: boolean;
+  /** When true the account list and add-controls are hidden; the head stays. */
+  readonly collapsed: boolean;
+  readonly onToggleCollapsed: () => void;
   readonly onAddAccount: () => void;
   readonly onAddAtIndex: (index: number) => void;
   readonly onUseSeed: () => void;
@@ -287,6 +360,17 @@ function SeedCard({
   return (
     <div className={styles.seedCard} data-testid={`seed-${wallet.id}`}>
       <div className={styles.seedHead}>
+        <button
+          type="button"
+          className={styles.collapseToggle}
+          data-testid={`seed-collapse-${wallet.id}`}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? 'Expand seed' : 'Collapse seed'}
+          title={collapsed ? 'Expand seed' : 'Collapse seed'}
+          onClick={onToggleCollapsed}
+        >
+          {collapsed ? '▸' : '▾'}
+        </button>
         {editingName ? (
           <span className={styles.renameRow}>
             <input
@@ -372,107 +456,113 @@ function SeedCard({
         )}
       </div>
 
-      <ul className={styles.accountList}>
-        {wallet.accounts.map((a) => {
-          // Two-tier selection:
-          //  • selectedInSeed — this seed's own chosen account (every seed has one;
-          //    gold ✓). Picking another updates only THIS seed's pointer.
-          //  • inService — the ONE account actually used for operations: the active
-          //    seed's selected account. Rendered ORANGE so it's unmistakable which
-          //    account is live, distinct from each seed's local selection.
-          const selectedInSeed = a.index === wallet.activeAccountIndex;
-          const inService = wallet.isActive && selectedInSeed;
-          const rowClass = inService
-            ? styles.accountInService
-            : selectedInSeed
-              ? styles.accountSelected
-              : '';
-          return (
-          <li key={a.index} className={styles.accountItem}>
-            <button
-              type="button"
-              data-testid={`account-${wallet.id}-${a.index}`}
-              data-in-service={inService ? 'true' : undefined}
-              className={`${styles.accountRow} ${rowClass}`}
-              disabled={busy}
-              onClick={() => onSelectAccount(a.index)}
-              title={
-                inService
-                  ? `In service: ${a.account}`
-                  : `Select ${a.account} in this seed`
-              }
-            >
-              <span className={styles.accountIndex}>#{a.index}</span>
-              <span className={styles.accountAddr}>{shortAddress(a.account)}</span>
-              {inService ? (
-                <span
-                  className={styles.accountServiceTag}
-                  data-testid={`account-inservice-${wallet.id}-${a.index}`}
-                >
-                  ● in service
-                </span>
-              ) : selectedInSeed ? (
-                <span className={styles.accountActiveTick} aria-hidden="true">
-                  ✓
-                </span>
-              ) : null}
-            </button>
-            {a.index !== 0 && (
+      {/* Collapsed hides the long account list AND the add-controls, leaving
+          the head so the user can still see which seeds exist. */}
+      {!collapsed && (
+        <>
+        <ul className={styles.accountList}>
+          {wallet.accounts.map((a) => {
+            // Two-tier selection:
+            //  • selectedInSeed — this seed's own chosen account (every seed has one;
+            //    gold ✓). Picking another updates only THIS seed's pointer.
+            //  • inService — the ONE account actually used for operations: the active
+            //    seed's selected account. Rendered ORANGE so it's unmistakable which
+            //    account is live, distinct from each seed's local selection.
+            const selectedInSeed = a.index === wallet.activeAccountIndex;
+            const inService = wallet.isActive && selectedInSeed;
+            const rowClass = inService
+              ? styles.accountInService
+              : selectedInSeed
+                ? styles.accountSelected
+                : '';
+            return (
+            <li key={a.index} className={styles.accountItem}>
               <button
                 type="button"
-                className={styles.removeAccount}
-                data-testid={`remove-account-${wallet.id}-${a.index}`}
-                aria-label={`Remove account #${a.index}`}
-                title={`Remove account #${a.index}`}
+                data-testid={`account-${wallet.id}-${a.index}`}
+                data-in-service={inService ? 'true' : undefined}
+                className={`${styles.accountRow} ${rowClass}`}
                 disabled={busy}
-                onClick={() => onRemoveAccount(a.index)}
+                onClick={() => onSelectAccount(a.index)}
+                title={
+                  inService
+                    ? `In service: ${a.account}`
+                    : `Select ${a.account} in this seed`
+                }
               >
-                ✕
+                <span className={styles.accountIndex}>#{a.index}</span>
+                <span className={styles.accountAddr}>{shortAddress(a.account)}</span>
+                {inService ? (
+                  <span
+                    className={styles.accountServiceTag}
+                    data-testid={`account-inservice-${wallet.id}-${a.index}`}
+                  >
+                    ● in service
+                  </span>
+                ) : selectedInSeed ? (
+                  <span className={styles.accountActiveTick} aria-hidden="true">
+                    ✓
+                  </span>
+                ) : null}
               </button>
-            )}
-          </li>
-          );
-        })}
-      </ul>
+              {a.index !== 0 && (
+                <button
+                  type="button"
+                  className={styles.removeAccount}
+                  data-testid={`remove-account-${wallet.id}-${a.index}`}
+                  aria-label={`Remove account #${a.index}`}
+                  title={`Remove account #${a.index}`}
+                  disabled={busy}
+                  onClick={() => onRemoveAccount(a.index)}
+                >
+                  ✕
+                </button>
+              )}
+            </li>
+            );
+          })}
+        </ul>
 
-      <div className={styles.addRow}>
-        <button
-          type="button"
-          className={styles.addButton}
-          data-testid={`add-account-${wallet.id}`}
-          disabled={busy}
-          onClick={onAddAccount}
-        >
-          + Add next account
-        </button>
-        <div className={styles.atIndexRow}>
-          <input
-            type="number"
-            min={0}
-            className={styles.indexInput}
-            data-testid={`add-index-input-${wallet.id}`}
-            placeholder="index"
-            value={indexInput}
-            onChange={(e) => setIndexInput(e.target.value)}
-            disabled={busy}
-          />
+        <div className={styles.addRow}>
           <button
             type="button"
             className={styles.addButton}
-            data-testid={`add-at-index-${wallet.id}`}
-            disabled={busy || indexInput.trim() === ''}
-            onClick={() => {
-              const n = Number(indexInput);
-              if (Number.isInteger(n) && n >= 0) {
-                onAddAtIndex(n);
-                setIndexInput('');
-              }
-            }}
+            data-testid={`add-account-${wallet.id}`}
+            disabled={busy}
+            onClick={onAddAccount}
           >
-            Add at index
+            + Add next account
           </button>
+          <div className={styles.atIndexRow}>
+            <input
+              type="number"
+              min={0}
+              className={styles.indexInput}
+              data-testid={`add-index-input-${wallet.id}`}
+              placeholder="index"
+              value={indexInput}
+              onChange={(e) => setIndexInput(e.target.value)}
+              disabled={busy}
+            />
+            <button
+              type="button"
+              className={styles.addButton}
+              data-testid={`add-at-index-${wallet.id}`}
+              disabled={busy || indexInput.trim() === ''}
+              onClick={() => {
+                const n = Number(indexInput);
+                if (Number.isInteger(n) && n >= 0) {
+                  onAddAtIndex(n);
+                  setIndexInput('');
+                }
+              }}
+            >
+              Add at index
+            </button>
+          </div>
         </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }

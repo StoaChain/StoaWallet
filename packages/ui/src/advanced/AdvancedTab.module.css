@@ -547,3 +547,79 @@
   outline: 2px solid var(--color-stoa-gold);
   outline-offset: 2px;
 }
+
+/* --- Sub-tabs --------------------------------------------------------------
+   The seed list grows without bound as accounts are added, so Backup sits
+   beside it rather than below it. Backup is intentionally outside the advanced
+   gate — every user must be able to export their keys. */
+.subTabs {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0.9rem;
+}
+
+.subTab {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-stoa-slate);
+  background: var(--color-stoa-dark);
+  border: 1px solid var(--color-stoa-border);
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+
+.subTab:hover {
+  color: var(--color-stoa-light);
+}
+
+.subTabActive {
+  color: var(--color-stoa-gold);
+  border-color: var(--color-stoa-gold);
+}
+
+.subTab:focus-visible {
+  outline: 2px solid var(--color-stoa-gold);
+  outline-offset: 2px;
+}
+
+/* --- Bulk expand/collapse --------------------------------------------------- */
+.bulkControls {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  margin-bottom: 0.4rem;
+}
+
+.bulkButton {
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--color-stoa-slate);
+  background: transparent;
+  border: 1px solid var(--color-stoa-border);
+  cursor: pointer;
+}
+
+.bulkButton:hover {
+  color: var(--color-stoa-gold);
+  border-color: var(--color-stoa-gold);
+}
+
+/* Per-card disclosure chevron, first control in the seed head. */
+.collapseToggle {
+  padding: 0 0.35rem;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--color-stoa-slate);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.collapseToggle:hover {
+  color: var(--color-stoa-gold);
+}
