@@ -69,7 +69,7 @@ import {
  *     phrase or password.
  */
 
-export type OnboardingMode = 'create' | 'import';
+export type OnboardingMode = 'create' | 'import' | 'codex';
 
 /** A wallet's plaintext metadata, readable from the vault WITHOUT unlocking. */
 export interface ExistingWalletSummary {
@@ -187,7 +187,16 @@ export interface RemoteVault {
    * Import an Ouronet Codex export in the host: the codex password transits once,
    * secrets are decrypted + re-sealed entirely in the host, only counts return.
    */
-  importCodex(json: string, codexPassword: string): Promise<RemoteImportCodexResult>;
+  importCodex(
+    json: string,
+    codexPassword: string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<RemoteImportCodexResult>;
+  /** Export the vault as a Codex document sealed at `exportPassword`. */
+  exportCodex(
+    exportPassword: string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<{ ok: true; json: string } | { ok: false; reason: string }>;
 }
 
 /** A public per-seed summary the Advanced tab renders (no secret material). */
@@ -530,7 +539,29 @@ export interface WalletContextValue {
    * wallet password, merge the seeds/keys. The decrypted secrets never reach the
    * popup (the host does it). Returns the count summary or a discriminated reason.
    */
-  importCodex(json: string, codexPassword: string): Promise<RemoteImportCodexResult>;
+  importCodex(
+    json: string,
+    codexPassword: string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<RemoteImportCodexResult>;
+  /**
+   * First-run onboarding straight from a codex (no pre-existing wallet). Unlike
+   * `importCodex` this does NOT require an unlocked vault — it creates one.
+   */
+  onboardFromCodex(
+    json: string,
+    codexPassword: string,
+    password: string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<RemoteImportCodexResult>;
+  /**
+   * Export the vault as a Codex document sealed at `exportPassword` (NOT the
+   * wallet password — the file leaves the device).
+   */
+  exportCodex(
+    exportPassword: string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<{ ok: true; json: string } | { ok: false; reason: string }>;
 
   /**
    * Sign + submit a same-chain transfer behind the keyring seam. Resolves the
@@ -1023,6 +1054,37 @@ export function WalletProvider({
   );
 
   /**
+   * FIRST-RUN onboarding from an Ouronet Codex: builds the vault directly from
+   * the codex's seeds instead of requiring an existing unlocked wallet.
+   *
+   * Runs on the LOCAL manager like the other two onboarding paths — onboarding
+   * predates the background session, so there is no remote vault to route to
+   * yet. Every wallet it creates is codex-origin.
+   */
+  const onboardFromCodex = useCallback(
+    async (
+      json: string,
+      codexPassword: string,
+      password: string,
+      onProgress?: (done: number, total: number) => void,
+    ): Promise<RemoteImportCodexResult> => {
+      const outcome = await manager.onboardFromCodex(
+        json,
+        codexPassword,
+        password,
+        onProgress,
+      );
+      if (outcome.ok) {
+        activeWalletIdRef.current = null;
+        await refreshFromStorage();
+        syncActiveSelection();
+      }
+      return outcome as RemoteImportCodexResult;
+    },
+    [manager, refreshFromStorage, syncActiveSelection],
+  );
+
+  /**
    * Pull the active account + the active wallet's account list off the REMOTE
    * vault (the background) and mirror them into context state. Used after a
    * remote unlock / account mutation so the screens render the background's
@@ -1294,20 +1356,45 @@ export function WalletProvider({
     [manager, syncActiveSelection, remoteVault, syncRemoteSelection],
   );
 
+  /**
+   * Export the vault as a sealed Codex document. Routes to the background when
+   * one is present (it holds the unlocked secret); the local manager otherwise.
+   */
+  const exportCodex = useCallback(
+    async (
+      exportPassword: string,
+      onProgress?: (done: number, total: number) => void,
+    ): Promise<{ ok: true; json: string } | { ok: false; reason: string }> => {
+      try {
+        if (remoteVault !== undefined) {
+          return await remoteVault.exportCodex(exportPassword, onProgress);
+        }
+        const json = await manager.exportCodex(exportPassword, onProgress);
+        return { ok: true, json };
+      } catch {
+        // The only throws are a locked wallet and an empty vault; both are
+        // secret-free refusals the panel renders as a message.
+        return { ok: false, reason: 'locked' };
+      }
+    },
+    [manager, remoteVault],
+  );
+
   const importCodex = useCallback(
     async (
       json: string,
       codexPassword: string,
+      onProgress?: (done: number, total: number) => void,
     ): Promise<RemoteImportCodexResult> => {
       if (remoteVault !== undefined) {
-        const result = await remoteVault.importCodex(json, codexPassword);
+        const result = await remoteVault.importCodex(json, codexPassword, onProgress);
         // A successful import added seeds; re-mirror the (unchanged active)
         // selection so a freshly imported seed is visible to the switcher.
         if (result.ok) await syncRemoteSelection();
         return result;
       }
       try {
-        const outcome = await manager.importCodex(json, codexPassword);
+        const outcome = await manager.importCodex(json, codexPassword, onProgress);
         if (outcome.ok) {
           syncActiveSelection();
           return { ok: true, summary: outcome.summary };
@@ -1868,6 +1955,8 @@ export function WalletProvider({
     removeAccount,
     renameWallet,
     importCodex,
+    exportCodex,
+    onboardFromCodex,
     sendCrossChainStep0,
     urstoaStake,
     urstoaUnstake,

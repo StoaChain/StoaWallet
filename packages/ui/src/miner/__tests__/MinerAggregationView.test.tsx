@@ -210,10 +210,10 @@ describe('MinerAggregationView', () => {
 
     const disclosure = screen.getByTestId('miner-gasless');
     // Matches the Phase-4/5 gasless messaging: chain-0 via the Ouronet Gas Station,
-    // chains 1-9 via kadena-xchain-gas. No per-source gas field anywhere.
+    // chains 1-9 via stoa-xchain-gas. No per-source gas field anywhere.
     expect(disclosure).toHaveTextContent(/gasless/i);
     expect(disclosure).toHaveTextContent(/Gas Station/i);
-    expect(disclosure).toHaveTextContent(/kadena-xchain-gas/i);
+    expect(disclosure).toHaveTextContent(/stoa-xchain-gas/i);
     expect(screen.queryByTestId('miner-gas-input')).toBeNull();
   });
 

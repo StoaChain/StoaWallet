@@ -16,7 +16,7 @@ import {
   createClient,
 } from '@stoachain/kadena-stoic-legacy/client';
 import type { ChainId } from '@stoachain/kadena-stoic-legacy/types';
-import { anuToStoa, GAS_PRICE_MIN_ANU } from '@stoachain/stoa-core/gas';
+import { stoaGasMeta } from '../gas';
 import { getActivePactUrl } from '@stoachain/stoa-core/network';
 import { STOA_AUTONOMIC_OURONETGASSTATION } from '@ouronet/ouronet-core/constants';
 
@@ -41,7 +41,7 @@ export function makeLiveGuardReadDeps(): GuardReadDeps {
           senderAccount: STOA_AUTONOMIC_OURONETGASSTATION,
           chainId: chainId as ChainId,
           gasLimit: READ_GAS_LIMIT,
-          gasPrice: anuToStoa(GAS_PRICE_MIN_ANU),
+          ...stoaGasMeta(),
           ttl: TX_TTL_SECONDS,
         })
         .setNetworkId(STOA_NETWORK_ID)

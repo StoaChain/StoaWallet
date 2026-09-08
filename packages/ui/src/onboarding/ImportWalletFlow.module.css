@@ -198,3 +198,79 @@
   color: var(--color-stoa-slate);
   cursor: not-allowed;
 }
+
+/* --- Codex import progress -------------------------------------------------
+   A determinate bar: each seed / pure key costs two password-KDF rounds, so a
+   multi-seed codex visibly pauses. Real counts prove the codex password was
+   accepted and work is happening, instead of a static label reading as a hang. */
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.progressTrack {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-stoa-dark);
+  border: 1px solid var(--color-stoa-border);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--color-stoa-gold);
+  /* Width is the only animated property so the bar cannot jitter the layout. */
+  transition: width 160ms ease-out;
+}
+
+/* --- File picker -----------------------------------------------------------
+   The native `<input type="file">` control cannot be styled, so it is kept in
+   the DOM (still focusable, still the thing that actually opens the dialog and
+   carries the change event) but visually hidden, and a real in-app button
+   triggers it. Hidden via clip rather than `display:none` so keyboard users can
+   still tab to it. */
+.fileHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.filePicker {
+  width: 100%;
+  border-radius: 999px;
+  padding: 0.7rem 1rem;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-stoa-light);
+  background: var(--color-stoa-dark);
+  border: 1px solid var(--color-stoa-border);
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.filePicker:hover {
+  border-color: var(--color-stoa-gold);
+  color: var(--color-stoa-gold);
+}
+
+.filePicker:focus-visible {
+  outline: 2px solid var(--color-stoa-gold);
+  outline-offset: 2px;
+}
+
+.fileChosen {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-stoa-gold);
+  word-break: break-all;
+}

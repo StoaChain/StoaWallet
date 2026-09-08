@@ -13,6 +13,7 @@ import {
   type RemoteImportCodexResult,
 } from '../context/WalletContext';
 import { seedTypeChipStyle } from '../app/seedTypeConfig';
+import { ExportWalletPanel } from './ExportWalletPanel';
 import { PasswordInput } from '../components/PasswordInput';
 import styles from './AdvancedTab.module.css';
 
@@ -78,6 +79,8 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
   const [wallets, setWallets] = useState<readonly RemoteWalletSummary[]>([]);
   const [pureKeys, setPureKeys] = useState<readonly RemotePureKeypair[]>([]);
   const [busy, setBusy] = useState(false);
+  // Determinate codex-import progress: [done, total] items, or null when idle.
+  const [codexProgress, setCodexProgress] = useState<readonly [number, number] | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async (): Promise<void> => {
@@ -141,8 +144,11 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
     async (json: string, codexPassword: string): Promise<RemoteImportCodexResult> => {
       setBusy(true);
       setNotice(null);
+      setCodexProgress([0, 0]);
       try {
-        const result = await importCodex(json, codexPassword);
+        const result = await importCodex(json, codexPassword, (done, total) =>
+          setCodexProgress([done, total]),
+        );
         if (result.ok) {
           const { seedsImported, accountsImported, keysImported } = result.summary;
           const parts: string[] = [];
@@ -166,6 +172,9 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
         return result;
       } finally {
         setBusy(false);
+        // Drop the bar on BOTH paths: a bar frozen at a partial count after a
+        // failure reads as a hang rather than an error.
+        setCodexProgress(null);
       }
     },
     [importCodex, refresh, onRequireUnlock, setAdvancedMode],
@@ -234,7 +243,8 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
             />
           ))}
           {pureKeys.length > 0 && <PureKeysPanel keys={pureKeys} />}
-          <ImportCodexPanel busy={busy} onImport={onImport} />
+          <ImportCodexPanel busy={busy} progress={codexProgress} onImport={onImport} />
+          <ExportWalletPanel />
         </div>
       )}
     </section>
@@ -503,9 +513,12 @@ function PureKeysPanel({
 /** The Codex import panel: a JSON file picker + the codex password + import. */
 function ImportCodexPanel({
   busy,
+  progress,
   onImport,
 }: {
   readonly busy: boolean;
+  /** [done, total] items while an import runs, else null. */
+  readonly progress: readonly [number, number] | null;
   readonly onImport: (
     json: string,
     codexPassword: string,
@@ -545,14 +558,24 @@ function ImportCodexPanel({
         Brings in all the codex&apos;s seeds, accounts and keys. The codex password
         is used only to decrypt — it never leaves the wallet.
       </p>
+      {/* The native control stays in the DOM — it owns the file dialog and the
+          change event — but is visually hidden behind an in-app button. */}
       <input
         ref={fileRef}
         type="file"
         accept="application/json,.json"
         data-testid="codex-file"
-        className={styles.fileInput}
+        className={styles.fileHidden}
         onChange={(e) => void onFile(e.target.files?.[0])}
       />
+      <button
+        type="button"
+        className={styles.filePicker}
+        data-testid="codex-file-choose"
+        onClick={() => fileRef.current?.click()}
+      >
+        {fileName === null ? 'Choose Codex file' : 'Choose a different file'}
+      </button>
       {fileName !== null && (
         <p className={styles.fileName}>Selected: {fileName}</p>
       )}
@@ -570,6 +593,31 @@ function ImportCodexPanel({
         <p className={styles.importError} role="alert" data-testid="import-error">
           {error}
         </p>
+      )}
+      {progress !== null && (
+        <div
+          className={styles.codexProgress}
+          data-testid="codex-import-progress"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={progress[1]}
+          aria-valuenow={progress[0]}
+          aria-label="Importing Codex"
+        >
+          <div className={styles.codexProgressTrack}>
+            <div
+              className={styles.codexProgressFill}
+              style={{
+                width: `${progress[1] > 0 ? Math.round((progress[0] / progress[1]) * 100) : 0}%`,
+              }}
+            />
+          </div>
+          <span data-testid="codex-import-progress-label">
+            {progress[1] > 0
+              ? `Importing ${progress[0]} of ${progress[1]}…`
+              : 'Opening Codex…'}
+          </span>
+        </div>
       )}
       <button
         type="button"

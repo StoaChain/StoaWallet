@@ -1,5 +1,6 @@
-import { anuToStoa, GAS_PRICE_MIN_ANU } from '@stoachain/stoa-core/gas';
 import { STOA_AUTONOMIC_OURONETGASSTATION } from '@ouronet/ouronet-core/constants';
+
+import { stoaGasMeta } from '../gas';
 
 import type { SignableKeypair } from '../api/sign';
 import { buildTransferCode } from './buildTransferCode';
@@ -7,9 +8,6 @@ import { signerSetForSameChain } from './gasPayerSigner';
 
 /** The autonomic gas-station account that sponsors every gasless transfer. */
 const STOA_GAS_STATION = STOA_AUTONOMIC_OURONETGASSTATION;
-
-/** Minimum gas price in Stoa units (ANU minimum converted once). */
-const GAS_PRICE_STOA = anuToStoa(GAS_PRICE_MIN_ANU);
 
 /**
  * A `k:` account is the literal prefix `k:` followed by a 64-char hex Ed25519
@@ -72,6 +70,12 @@ export interface BuildTxSpec {
   readonly chainId: string;
   readonly gasLimit: number;
   readonly gasPriceStoa: number;
+  /**
+   * The exact timestamp `gasPriceStoa` was derived from. Both come from ONE
+   * `stoaGasMeta()` call so they can never straddle a Yin tick boundary and
+   * underprice the transaction. Stamped into `meta` alongside the price.
+   */
+  readonly creationTime: number;
 }
 
 /**
@@ -219,6 +223,11 @@ export async function sendSameChain(
   const signerPublicKey =
     signerSetForSameChain(signingKeypairs[0])[0]?.publicKey ?? '';
 
+  // ONE Yin clock read for this send: the simulate and the submitted tx are
+  // priced from the SAME creationTime, so calibration can never be done against
+  // a price that differs from the one actually submitted.
+  const { creationTime, gasPrice } = stoaGasMeta();
+
   const buildAt = (gasLimit: number): BuiltTx =>
     d.buildTx({
       pactCode,
@@ -228,7 +237,8 @@ export async function sendSameChain(
       signerPublicKey,
       chainId,
       gasLimit,
-      gasPriceStoa: GAS_PRICE_STOA,
+      gasPriceStoa: gasPrice,
+      creationTime,
     });
 
   // Simulate with a generous limit, then calibrate the real gas from the result.

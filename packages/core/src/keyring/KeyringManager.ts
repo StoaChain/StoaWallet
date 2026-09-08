@@ -46,7 +46,11 @@ import {
 
 import { smartDecrypt, smartEncrypt } from '@stoachain/stoa-core/crypto';
 
-import { importCodex as coreImportCodex, type ImportCodexOutcome } from '../codex';
+import {
+  importCodex as coreImportCodex,
+  buildCodexExport,
+  type ImportCodexOutcome,
+} from '../codex';
 import { deriveAccounts, type AccountRecord } from './deriveAccounts';
 import { decryptPhrase, encryptPhrase } from './encryptAtRest';
 import { generateMnemonic, validateMnemonic } from './mnemonic';
@@ -121,6 +125,19 @@ export class WalletLockedError extends Error {
   constructor() {
     super('No wallet is unlocked; cannot resolve signing keypairs.');
     this.name = 'WalletLockedError';
+  }
+}
+
+/**
+ * Thrown by `onboardFromCodex` when a vault already exists. First-run onboarding
+ * must never overwrite a stored vault — the seeds it would destroy may be ones
+ * the user never backed up. Folding a codex into an existing wallet is
+ * `importCodex`, which merges rather than replaces.
+ */
+export class VaultAlreadyExistsError extends Error {
+  constructor() {
+    super('A vault already exists; use importCodex to add a codex to it.');
+    this.name = 'VaultAlreadyExistsError';
   }
 }
 
@@ -370,6 +387,7 @@ export class KeyringManager {
   async importCodex(
     json: string,
     codexPassword: string,
+    onProgress?: (done: number, total: number) => void,
   ): Promise<ImportCodexOutcome> {
     if (this.unlocked === null) {
       throw new WalletLockedError();
@@ -415,6 +433,7 @@ export class KeyringManager {
         return `pure-import-${vault.wallets.length}-${keyN}`;
       },
       now: () => new Date().toISOString(),
+      ...(onProgress ? { onProgress } : {}),
     });
 
     if (!outcome.ok) return outcome;
@@ -452,6 +471,133 @@ export class KeyringManager {
     };
     await this.persist(nextVault);
     return outcome;
+  }
+
+  /**
+   * FIRST-RUN onboarding straight from an Ouronet Codex export.
+   *
+   * {@link importCodex} cannot serve this case: it requires an already-unlocked
+   * wallet because it re-seals the codex seeds with the WALLET password held in
+   * memory. At first run there is no vault and no password yet. The alternative
+   * — generate a throwaway seed, onboard it, then import — would leave a phantom
+   * wallet whose mnemonic the user never backed up but can still receive funds
+   * on, so this path builds the vault from the codex contents directly.
+   *
+   * Every wallet it creates is `origin: 'codex'` (advanced mode is forced on for
+   * those). Nothing is persisted unless the whole import succeeds: a half-written
+   * vault would strand the user with `hasExistingWallet` true and no seed they
+   * control, and onboarding would never be offered again.
+   *
+   * Refuses to run when a vault already exists — re-running it would clobber
+   * seeds the user may not have backed up. Use `importCodex` to fold a codex
+   * into an existing wallet.
+   */
+  async onboardFromCodex(
+    json: string,
+    codexPassword: string,
+    password: string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<ImportCodexOutcome> {
+    if ((await this.readVault()) !== null) {
+      throw new VaultAlreadyExistsError();
+    }
+
+    let walletN = 0;
+    let keyN = 0;
+
+    const outcome = await coreImportCodex(json, {
+      decrypt: (blob) => smartDecrypt(blob, codexPassword),
+      encryptPhrase: (mnemonic) => encryptPhrase(mnemonic, password),
+      encryptPrivateKey: (privateKey) => smartEncrypt(privateKey, password, '2'),
+      // A fresh vault holds nothing, so there is nothing to dedupe against and
+      // no same-seed merge is possible — every seed in the codex is brand new.
+      existingPubKeys: new Set<string>(),
+      existingWallets: [],
+      genId: (kind) => {
+        if (kind === 'wallet') {
+          walletN += 1;
+          return `wallet-${walletN}`;
+        }
+        keyN += 1;
+        return `pure-import-0-${keyN}`;
+      },
+      now: () => new Date().toISOString(),
+      ...(onProgress ? { onProgress } : {}),
+    });
+
+    if (!outcome.ok) return outcome;
+
+    // A codex that decrypts but carries no seeds would otherwise produce a vault
+    // with no wallets — unopenable, and it would still block onboarding.
+    const firstWallet = outcome.wallets[0];
+    if (firstWallet === undefined) {
+      return { ok: false, reason: 'no-importable-content' };
+    }
+
+    const wallets = outcome.wallets.map((w) => ({ ...w, origin: 'codex' as const }));
+
+    await this.persist({
+      wallets,
+      activeWalletId: firstWallet.id,
+      pureKeypairs: outcome.pureKeypairs,
+    });
+
+    // Onboarding ends UNLOCKED, matching createWallet/importWallet — otherwise
+    // the user is dropped on a lock screen the instant they set their password.
+    // Unlocking from the persisted vault reuses the one decrypt path rather than
+    // carrying a plaintext mnemonic out of the import loop.
+    await this.unlock(firstWallet.id, password);
+
+    return outcome;
+  }
+
+  /**
+   * Export the vault as an Ouronet Codex file, sealed at a SEPARATE export
+   * password.
+   *
+   * The mirror of {@link importCodex}: every seed phrase and pure private key is
+   * opened at the WALLET password and immediately re-sealed at the EXPORT
+   * password, so the plaintext exists only in memory for the width of one
+   * statement and the file that lands on disk is readable only with the password
+   * the user chose for it.
+   *
+   * The export password is deliberately NOT the wallet password: this file
+   * leaves the device and ends up in backups and cloud drives, and reusing the
+   * daily unlock password would spread it to all of them.
+   *
+   * Requires an unlocked wallet — it decrypts every seed, so it proves ownership
+   * first like any other secret-touching operation.
+   *
+   * Carries seeds and pure keypairs only; address book, advanced accounts and
+   * settings are out of scope (see `buildCodexExport`).
+   */
+  async exportCodex(
+    exportPassword: string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<string> {
+    if (this.unlocked === null) {
+      throw new WalletLockedError();
+    }
+    const walletPassword = this.unlocked.password;
+    const vault = await this.requireVault();
+
+    const outcome = await buildCodexExport(
+      { wallets: vault.wallets, pureKeypairs: pureKeypairsOf(vault) },
+      {
+        // Seeds are sealed with `encryptPhrase`; pure keys with `smartEncrypt`.
+        // Both open through `smartDecrypt` at the wallet password, so one seam
+        // covers the two envelope kinds.
+        open: (blob) => smartDecrypt(blob, walletPassword),
+        reseal: (plaintext) => smartEncrypt(plaintext, exportPassword, '2'),
+        ...(onProgress ? { onProgress } : {}),
+      },
+    );
+
+    if (!outcome.ok) {
+      throw new Error('Nothing to export: the vault holds no wallets.');
+    }
+
+    return JSON.stringify(outcome.export);
   }
 
   /**

@@ -174,7 +174,7 @@ describe('CrossChainTransferForm', () => {
 
   it('discloses a DIFFERENT gas mode for source "0" (gas station) vs source "5" (xchain-gas)', async () => {
     // Source 0 routes gas through the Ouronet Gas Station; any other source
-    // uses kadena-xchain-gas. The disclosure text must DIFFER so the user knows
+    // uses stoa-xchain-gas. The disclosure text must DIFFER so the user knows
     // who pays — a frozen single message would mislead on one of the paths.
     const { ctl } = renderForm();
     await onboard(ctl);

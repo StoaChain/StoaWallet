@@ -9,6 +9,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -246,19 +247,26 @@ describe('AdvancedTab', () => {
     await act(async () => {
       fireEvent.click(screen.getByTestId('advanced-mode-toggle'));
     });
-    const field = screen.getByLabelText(/codex password/i) as HTMLInputElement;
+    const codexField = screen.getByTestId('codex-password-field');
+    const field = within(codexField).getByLabelText(
+      /codex password/i,
+    ) as HTMLInputElement;
     await act(async () => {
       fireEvent.change(field, { target: { value: 'my-secret' } });
     });
     // Masked by default; the reveal toggle flips it to readable text and back.
     expect(field).toHaveAttribute('type', 'password');
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /show password/i }));
+      fireEvent.click(
+        within(codexField).getByRole('button', { name: /show password/i }),
+      );
     });
     expect(field).toHaveAttribute('type', 'text');
     expect(field).toHaveValue('my-secret');
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /hide password/i }));
+      fireEvent.click(
+        within(codexField).getByRole('button', { name: /hide password/i }),
+      );
     });
     expect(field).toHaveAttribute('type', 'password');
   });

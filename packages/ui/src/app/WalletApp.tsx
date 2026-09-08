@@ -9,6 +9,7 @@ import { type CrossChainRecoveryRoute } from '../crosschain/CrossChainTransferFo
 import { BrandSplash } from '../components/BrandSplash';
 import { CreateWalletFlow } from '../onboarding/CreateWalletFlow';
 import { ImportWalletFlow } from '../onboarding/ImportWalletFlow';
+import { ImportCodexFlow } from '../onboarding/ImportCodexFlow';
 import { AutoLockSettings } from '../settings/AutoLockSettings';
 import { SignMessageSettings } from '../settings/SignMessageSettings';
 import { ForwardSearchSettings } from '../settings/ForwardSearchSettings';
@@ -282,7 +283,22 @@ function Onboarding({
                 setMode('import');
               }}
             >
-              Import existing
+              Restore from 24 words
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'codex'}
+              className={`${styles.modeButton} ${styles.modeButtonGlass} ${mode === 'codex' ? styles.modeButtonActive : ''}`}
+              onClick={() => {
+                if (routeToExpand) {
+                  onExpand!();
+                  return;
+                }
+                setMode('codex');
+              }}
+            >
+              Import Codex
             </button>
           </div>
 
@@ -294,6 +310,8 @@ function Onboarding({
             </p>
           ) : mode === 'create' ? (
             <CreateWalletFlow onComplete={() => undefined} />
+          ) : mode === 'codex' ? (
+            <ImportCodexFlow />
           ) : (
             <ImportWalletFlow />
           )}

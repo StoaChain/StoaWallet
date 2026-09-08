@@ -16,14 +16,12 @@ import {
   createClient,
 } from '@stoachain/kadena-stoic-legacy/client';
 import type { ChainId } from '@stoachain/kadena-stoic-legacy/types';
-import {
-  anuToStoa,
-  calculateAutoGasLimit,
-  GAS_PRICE_MIN_ANU,
-} from '@stoachain/stoa-core/gas';
+import { calculateAutoGasLimit } from '@stoachain/stoa-core/gas';
 import { getActivePactUrl } from '@stoachain/stoa-core/network';
 import { fromKeypair, universalSignTransaction } from '@stoachain/stoa-core/signing';
 import { STOA_AUTONOMIC_OURONETGASSTATION } from '@ouronet/ouronet-core/constants';
+
+import { stoaGasMeta } from '../gas';
 
 import type { BuiltTx, SameChainDeps, SimulateResult } from './sendSameChain';
 
@@ -100,7 +98,7 @@ export function makeLiveSameChainDeps(): SameChainDeps {
           senderAccount: STOA_AUTONOMIC_OURONETGASSTATION,
           chainId: chainId as ChainId,
           gasLimit: SIMULATE_GAS_LIMIT,
-          gasPrice: anuToStoa(GAS_PRICE_MIN_ANU),
+          ...stoaGasMeta(),
           ttl: TX_TTL_SECONDS,
         })
         .setNetworkId(STOA_NETWORK_ID)
@@ -119,6 +117,10 @@ export function makeLiveSameChainDeps(): SameChainDeps {
           chainId: spec.chainId as ChainId,
           gasLimit: spec.gasLimit,
           gasPrice: spec.gasPriceStoa,
+          // Stamped from the SAME stoaGasMeta() read that produced gasPriceStoa
+          // (Yin Engine): consensus checks the price against the block time, so
+          // the two must describe the same instant.
+          creationTime: spec.creationTime,
           ttl: TX_TTL_SECONDS,
         })
         .setNetworkId(STOA_NETWORK_ID);

@@ -39,7 +39,7 @@ function explorerAccountUrl(account: string): string {
 /** The autonomic Ouronet Gas Station account that sponsors chain-0 / same-chain gas. */
 const OURONET_GAS_STATION = 'c:iQQFWj6gWtpGEzhM_O5ekW1QtnQQy55R8BRPGhj_0FU';
 /** The Chainweb cross-chain gas account that funds the continuation (step 1). */
-const KADENA_XCHAIN_GAS = 'kadena-xchain-gas';
+const STOA_XCHAIN_GAS = 'stoa-xchain-gas';
 
 export interface SendFormProps {
   /**
@@ -179,7 +179,7 @@ export function SendForm({
   // The DESTINATION is the only chain Send lets you pick. It defaults to the
   // source (a plain same-chain send); choosing a different chain makes it a
   // fully-sponsored CROSS-CHAIN transfer (the SAME core path the Cross-chain
-  // action uses — gas station on chain 0 / kadena-xchain-gas elsewhere).
+  // action uses — gas station on chain 0 / stoa-xchain-gas elsewhere).
   const [targetChain, setTargetChain] = useState(sourceChain);
   const isCrossChain = targetChain !== sourceChain;
 
@@ -1297,8 +1297,8 @@ function SameChainSponsorship({ gating }: { gating: string }): ReactNode {
 /**
  * Cross-chain gas disclosure: a TWO-STEP breakdown, both legs sponsored so the
  * user never pays gas. Step 0 (the source-chain burn) is covered by the Ouronet
- * Gas Station when leaving chain 0, else by `kadena-xchain-gas`; Step 1 (the
- * continuation/mint on the target chain) is covered by `kadena-xchain-gas`.
+ * Gas Station when leaving chain 0, else by `stoa-xchain-gas`; Step 1 (the
+ * continuation/mint on the target chain) is covered by `stoa-xchain-gas`.
  */
 function CrossChainSponsorship({
   sourceChain,
@@ -1321,13 +1321,13 @@ function CrossChainSponsorship({
           {step0IsGasStation ? (
             <SponsorLink account={OURONET_GAS_STATION} label="Ouronet Gas Station" />
           ) : (
-            <SponsorLink account={KADENA_XCHAIN_GAS} label="kadena-xchain-gas" />
+            <SponsorLink account={STOA_XCHAIN_GAS} label="stoa-xchain-gas" />
           )}
         </li>
         <li>
           <span className={styles.stepTag}>Step 1</span> continuation on Chain{' '}
           {targetChain}, paid by{' '}
-          <SponsorLink account={KADENA_XCHAIN_GAS} label="kadena-xchain-gas" />
+          <SponsorLink account={STOA_XCHAIN_GAS} label="stoa-xchain-gas" />
         </li>
       </ol>
       <p className={styles.sponsorNote}>

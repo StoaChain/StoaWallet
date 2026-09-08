@@ -9,7 +9,7 @@ import {
   submitCrossChainTransfer,
 } from '@ouronet/ouronet-core/interactions/crossChainFunctions';
 import { STOA_AUTONOMIC_OURONETGASSTATION } from '@ouronet/ouronet-core/constants';
-import { anuToStoa, GAS_PRICE_MIN_ANU } from '@stoachain/stoa-core/gas';
+import { stoaGasMeta } from '../gas';
 import { extractKeysetFromGuard } from '@stoachain/stoa-core/guard';
 import { getActivePactUrl } from '@stoachain/stoa-core/network';
 import {
@@ -57,7 +57,7 @@ function makeLiveBuildStep0Deps(): BuildStep0Deps {
           senderAccount: STOA_AUTONOMIC_OURONETGASSTATION,
           chainId: chainId as ChainId,
           gasLimit: READ_GAS_LIMIT,
-          gasPrice: anuToStoa(GAS_PRICE_MIN_ANU),
+          ...stoaGasMeta(),
           ttl: TX_TTL_SECONDS,
         })
         .setNetworkId(STOA_NETWORK_ID)

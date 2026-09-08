@@ -9,7 +9,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@stoachain/stoa-core": "4.3.7",
+    "@stoachain/stoa-core": "4.4.0",
     "@stoawallet/core": "workspace:*",
     "qrcode.react": "^4.2.0"
   },

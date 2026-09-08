@@ -16,6 +16,7 @@ import type {
   ResponseFor,
   SignerSpec,
   SignProgress,
+  CodexProgress,
   UrStoaOpRequest,
   WireAccount,
   WireCommand,
@@ -163,15 +164,90 @@ export class BackgroundKeyVaultProxy implements RemoteVault {
     return res.ok ? { ok: true } : { ok: false, reason: mapReason(res.reason) };
   }
 
+  /**
+   * Export the vault as a Codex document sealed at `exportPassword`. The worker
+   * does the decrypt/re-seal; the popup only ever holds the sealed JSON.
+   */
+  async exportCodex(
+    exportPassword: string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<{ ok: true; json: string } | { ok: false; reason: string }> {
+    const chrome = (globalThis as unknown as { chrome?: ChromeRuntime }).chrome;
+    const progressId =
+      onProgress !== undefined
+        ? `codex-export-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+        : undefined;
+    let listener: ((msg: unknown) => void) | undefined;
+    if (progressId !== undefined && chrome?.runtime?.onMessage?.addListener !== undefined) {
+      const tick = onProgress;
+      listener = (msg: unknown): void => {
+        const m = msg as Partial<CodexProgress>;
+        if (
+          m?.type === 'codexProgress' &&
+          m.progressId === progressId &&
+          typeof m.done === 'number' &&
+          typeof m.total === 'number'
+        ) {
+          tick?.(m.done, m.total);
+        }
+      };
+      chrome.runtime.onMessage.addListener(listener);
+    }
+
+    try {
+      const res = await this.send({ type: 'exportCodex', exportPassword, progressId });
+      return res.ok
+        ? { ok: true, json: res.json }
+        : { ok: false, reason: res.reason };
+    } finally {
+      if (listener !== undefined && chrome?.runtime?.onMessage?.removeListener !== undefined) {
+        chrome.runtime.onMessage.removeListener(listener);
+      }
+    }
+  }
+
   /** Import an Ouronet Codex export in the worker; only counts return. */
   async importCodex(
     json: string,
     codexPassword: string,
+    onProgress?: (done: number, total: number) => void,
   ): Promise<RemoteImportCodexResult> {
-    const res = await this.send({ type: 'importCodex', json, codexPassword });
-    return res.ok
-      ? { ok: true, summary: res.summary }
-      : { ok: false, reason: res.reason };
+    const chrome = (globalThis as unknown as { chrome?: ChromeRuntime }).chrome;
+    // Subscribe to determinate-progress pushes for THIS import only (matched by
+    // a unique id), so a multi-seed codex can drive the progress bar instead of
+    // a static label the user cannot tell apart from a hang.
+    const progressId =
+      onProgress !== undefined
+        ? `codex-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+        : undefined;
+    let listener: ((msg: unknown) => void) | undefined;
+    if (progressId !== undefined && chrome?.runtime?.onMessage?.addListener !== undefined) {
+      // Capture into a const so TS keeps the narrowing inside the closure.
+      const tick = onProgress;
+      listener = (msg: unknown): void => {
+        const m = msg as Partial<CodexProgress>;
+        if (
+          m?.type === 'codexProgress' &&
+          m.progressId === progressId &&
+          typeof m.done === 'number' &&
+          typeof m.total === 'number'
+        ) {
+          tick?.(m.done, m.total);
+        }
+      };
+      chrome.runtime.onMessage.addListener(listener);
+    }
+
+    try {
+      const res = await this.send({ type: 'importCodex', json, codexPassword, progressId });
+      return res.ok
+        ? { ok: true, summary: res.summary }
+        : { ok: false, reason: res.reason };
+    } finally {
+      if (listener !== undefined && chrome?.runtime?.onMessage?.removeListener !== undefined) {
+        chrome.runtime.onMessage.removeListener(listener);
+      }
+    }
   }
 
   /** The active account of the unlocked wallet, or null. Carries no key. */

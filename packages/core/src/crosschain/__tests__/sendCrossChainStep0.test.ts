@@ -104,7 +104,7 @@ describe('sendCrossChainStep0 — gas-mode signing (RR#3)', () => {
     const res = await sendCrossChainStep0(chain5Input(), [senderKeypair], deps);
 
     expect(res).toEqual({ ok: true, requestKey: REQUEST_KEY, sourceChain: '5', targetChain: '7' });
-    // Non-zero source chains pay gas via the unsigned kadena-xchain-gas account,
+    // Non-zero source chains pay gas via the unsigned stoa-xchain-gas account,
     // so the sender is the ONLY signer — passing a second keypair would over-sign.
     const signedKeypairs = (deps.signTransaction as ReturnType<typeof vi.fn>).mock.calls[0][1];
     expect(signedKeypairs).toHaveLength(1);

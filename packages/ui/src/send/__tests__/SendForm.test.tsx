@@ -736,7 +736,7 @@ describe('SendForm', () => {
     );
   });
 
-  it('discloses the cross-chain 2-step gas model from chain 0: Step 0 GasStation, Step 1 kadena-xchain-gas', async () => {
+  it('discloses the cross-chain 2-step gas model from chain 0: Step 0 GasStation, Step 1 stoa-xchain-gas', async () => {
     renderForm({ sourceChain: '0' });
     await act(async () => {
       setDestination('1');
@@ -751,25 +751,25 @@ describe('SendForm', () => {
       'href',
       'https://explorer.stoachain.com/accounts/c:iQQFWj6gWtpGEzhM_O5ekW1QtnQQy55R8BRPGhj_0FU',
     );
-    // Step 1 (continuation on the target) → kadena-xchain-gas.
+    // Step 1 (continuation on the target) → stoa-xchain-gas.
     expect(
-      within(note).getByRole('link', { name: /kadena-xchain-gas/i }),
+      within(note).getByRole('link', { name: /stoa-xchain-gas/i }),
     ).toHaveAttribute(
       'href',
-      'https://explorer.stoachain.com/accounts/kadena-xchain-gas',
+      'https://explorer.stoachain.com/accounts/stoa-xchain-gas',
     );
   });
 
-  it('uses kadena-xchain-gas for Step 0 when the source is NOT chain 0', async () => {
+  it('uses stoa-xchain-gas for Step 0 when the source is NOT chain 0', async () => {
     renderForm({ sourceChain: '5' });
     await act(async () => {
       setDestination('1');
     });
     const note = screen.getByTestId('send-crosschain-note');
-    // Both legs are kadena-xchain-gas when leaving a non-zero chain (no GasStation).
+    // Both legs are stoa-xchain-gas when leaving a non-zero chain (no GasStation).
     expect(note).not.toHaveTextContent(/Ouronet Gas Station/i);
     const xchainLinks = within(note).getAllByRole('link', {
-      name: /kadena-xchain-gas/i,
+      name: /stoa-xchain-gas/i,
     });
     expect(xchainLinks).toHaveLength(2);
   });

@@ -103,13 +103,13 @@ export function CrossChainTransferForm({
   const showPreview = pendingParams !== null && (status === 'configure' || inFlight);
 
   // Source 0 routes gas through the Ouronet Gas Station (DALOS.GAS_PAYER co-sign);
-  // any other source uses kadena-xchain-gas. The disclosure names who pays so the
+  // any other source uses stoa-xchain-gas. The disclosure names who pays so the
   // user is never misled about gas on either path.
   const gasMode = useMemo(
     () =>
       sourceChain === '0'
         ? 'Gas covered by the Ouronet Gas Station (DALOS.GAS_PAYER).'
-        : 'Gas covered by kadena-xchain-gas.',
+        : 'Gas covered by stoa-xchain-gas.',
     [sourceChain],
   );
 

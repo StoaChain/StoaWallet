@@ -71,6 +71,8 @@ export { BrandSplash, type BrandSplashProps } from './components/BrandSplash';
 // Onboarding flows (create / import) and wallet screens (unlock / account switcher).
 export { CreateWalletFlow, type CreateWalletFlowProps } from './onboarding/CreateWalletFlow';
 export { ImportWalletFlow, type ImportWalletFlowProps } from './onboarding/ImportWalletFlow';
+export { ImportCodexFlow } from './onboarding/ImportCodexFlow';
+export { ExportWalletPanel } from './advanced/ExportWalletPanel';
 export { UnlockScreen, type UnlockScreenProps } from './wallet/UnlockScreen';
 export { AccountSwitcher, type AccountSwitcherProps } from './wallet/AccountSwitcher';
 

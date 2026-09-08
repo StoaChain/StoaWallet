@@ -50,6 +50,7 @@ import {
   type SignTxRequest,
   type SignMessageRequest,
   type SignProgress,
+  type CodexProgress,
   type UrStoaOpRequest,
   type UrStoaOpResponse,
   type WireAccount,
@@ -560,6 +561,42 @@ export async function routeRequest(
         await manager.renameWallet(request.walletId, request.name);
         return ok({});
 
+      case 'exportCodex': {
+        if (!keyVault.isUnlocked()) {
+          return err('locked');
+        }
+        // Export DECRYPTS every seed, so it happens entirely in the worker; only
+        // the already-sealed document crosses back to the popup.
+        const exportProgressId = request.progressId;
+        const onExportProgress =
+          exportProgressId === undefined
+            ? undefined
+            : (done: number, total: number): void => {
+                const push: CodexProgress = {
+                  type: 'codexProgress',
+                  progressId: exportProgressId,
+                  done,
+                  total,
+                };
+                try {
+                  void chrome.runtime.sendMessage(push).catch(() => {});
+                } catch {
+                  /* no receiver / context gone — drop the tick */
+                }
+              };
+
+        try {
+          const json = await manager.exportCodex(
+            request.exportPassword,
+            onExportProgress,
+          );
+          return ok({ json });
+        } catch {
+          // Locked mid-flight or an empty vault — both secret-free refusals.
+          return err('locked');
+        }
+      }
+
       case 'importCodex': {
         if (!keyVault.isUnlocked()) {
           return err('locked');
@@ -567,9 +604,31 @@ export async function routeRequest(
         // The codex password transits the wire ONCE (popup → worker) like the
         // unlock password; the decrypted secrets are re-sealed entirely here and
         // only the count summary crosses back.
+        // Mirrors the signProgress rail: fire-and-forget pushes the popup
+        // matches by progressId. A closed popup simply has no receiver, so the
+        // tick is dropped rather than failing the import.
+        const codexProgressId = request.progressId;
+        const onCodexProgress =
+          codexProgressId === undefined
+            ? undefined
+            : (done: number, total: number): void => {
+                const push: CodexProgress = {
+                  type: 'codexProgress',
+                  progressId: codexProgressId,
+                  done,
+                  total,
+                };
+                try {
+                  void chrome.runtime.sendMessage(push).catch(() => {});
+                } catch {
+                  /* no receiver / context gone — drop the tick */
+                }
+              };
+
         const outcome = await manager.importCodex(
           request.json,
           request.codexPassword,
+          onCodexProgress,
         );
         return outcome.ok
           ? ok({ summary: outcome.summary })

@@ -119,7 +119,7 @@ function exceedsMax(amount: string, max: string): boolean {
  *
  * The view composes `useMinerAggregation` and holds NO key material — the hook
  * resolves signers ONCE up-front and owns signing. The sweep is GASLESS (chain-0
- * via the Ouronet Gas Station, chains 1-9 via kadena-xchain-gas), so there is no
+ * via the Ouronet Gas Station, chains 1-9 via stoa-xchain-gas), so there is no
  * per-source gas input.
  *
  * Each source's terminal state is DISTINCT so the user is never misled and one
@@ -284,7 +284,7 @@ export function MinerAggregationView({
 
       <p className={styles.gasless} data-testid="miner-gasless">
         This sweep is gasless — chain-0 sources are sponsored by the Ouronet Gas
-        Station (DALOS.GAS_PAYER) and chains 1-9 by kadena-xchain-gas. You pay no
+        Station (DALOS.GAS_PAYER) and chains 1-9 by stoa-xchain-gas. You pay no
         gas on either path.
       </p>
 

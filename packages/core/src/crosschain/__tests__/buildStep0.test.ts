@@ -78,7 +78,7 @@ describe('buildCrossChainStep0 — gas split (RR#3)', () => {
 
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    // Non-zero source chains pay gas via the unsigned kadena-xchain-gas account,
+    // Non-zero source chains pay gas via the unsigned stoa-xchain-gas account,
     // so the sender is the ONLY signer — the gas-station pub must not appear.
     expect(res.gasMode).toBe('xchain-gas');
     expect(res.signerPubs).toEqual([SENDER_PUB]);

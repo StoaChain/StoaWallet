@@ -2,7 +2,7 @@ import {
   InMemoryKeyVault,
   InMemoryStorageAdapter,
 } from '@stoawallet/core/testing';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { WalletProvider } from '../../context/WalletContext';
@@ -68,8 +68,36 @@ describe('WalletApp', () => {
       screen.getByRole('tab', { name: /create new wallet/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('tab', { name: /import existing/i }),
+      screen.getByRole('tab', { name: /restore from 24 words/i }),
     ).toBeInTheDocument();
+  });
+
+  it('offers Import Codex as a THIRD first-run option, not only inside Advanced', async () => {
+    const storage = new InMemoryStorageAdapter();
+    renderApp(storage);
+
+    // A codex holder has no 24-word phrase to type, so without this button the
+    // only way in would be to create a throwaway wallet first just to reach the
+    // Advanced tab's importer.
+    await waitFor(() =>
+      expect(
+        screen.getByRole('tab', { name: /import codex/i }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('opens the codex flow when Import Codex is chosen', async () => {
+    const storage = new InMemoryStorageAdapter();
+    renderApp(storage);
+
+    await waitFor(() => screen.getByRole('tab', { name: /import codex/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('tab', { name: /import codex/i }));
+    });
+
+    // The codex file + its own password come FIRST, before any wallet password.
+    expect(screen.getByTestId('import-codex-flow')).toBeInTheDocument();
+    expect(screen.getByTestId('onboard-codex-file')).toBeInTheDocument();
   });
 
   it('renders the UnlockScreen when a wallet exists but is locked', async () => {
@@ -200,7 +228,7 @@ describe('WalletApp expand seam', () => {
       });
     });
 
-    const importButton = screen.getByRole('tab', { name: /import existing/i });
+    const importButton = screen.getByRole('tab', { name: /restore from 24 words/i });
     await act(async () => {
       importButton.click();
     });

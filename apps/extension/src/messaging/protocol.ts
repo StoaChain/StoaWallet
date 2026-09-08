@@ -158,6 +158,23 @@ export interface SignProgress {
 }
 
 /**
+ * A BROADCAST progress push (background → popup) for a Codex import, driving the
+ * determinate progress bar. Each seed and pure key costs two password-KDF rounds,
+ * so a multi-seed codex takes seconds — without this the popup can only show a
+ * static label the user cannot distinguish from a hang.
+ *
+ * Like {@link SignProgress} it is fire-and-forget and NOT part of the
+ * request/response unions; the popup matches it by `progressId`. Secret-free:
+ * counts only, never a seed name or key.
+ */
+export interface CodexProgress {
+  readonly type: 'codexProgress';
+  readonly progressId: string;
+  readonly done: number;
+  readonly total: number;
+}
+
+/**
  * REQUEST union: every message the popup sends the background. Each arm is
  * discriminated on `type` so the background switches exhaustively.
  */
@@ -179,7 +196,20 @@ export type Request =
   | { readonly type: 'addAccountAtIndex'; readonly walletId: string; readonly index: number }
   | { readonly type: 'removeAccount'; readonly walletId: string; readonly index: number }
   | { readonly type: 'renameWallet'; readonly walletId: string; readonly name: string }
-  | { readonly type: 'importCodex'; readonly json: string; readonly codexPassword: string }
+  | {
+      readonly type: 'exportCodex';
+      /** The password the EXPORT FILE is sealed at — never the wallet password. */
+      readonly exportPassword: string;
+      /** Correlates the background's {@link CodexProgress} pushes to this request. */
+      readonly progressId?: string;
+    }
+  | {
+      readonly type: 'importCodex';
+      readonly json: string;
+      readonly codexPassword: string;
+      /** Correlates the background's {@link CodexProgress} pushes to this request. */
+      readonly progressId?: string;
+    }
   | SignTxRequest
   | UrStoaOpRequest
   | SignMessageRequest;
@@ -297,6 +327,15 @@ export type ListPureKeypairsResponse =
  * secrets were decrypted + re-sealed entirely in the worker). The failure arm
  * carries the core reason plus a local `locked`. Secret-free.
  */
+/**
+ * exportCodex RESULT: the serialized Codex document, or a secret-free refusal.
+ * The JSON is already sealed at the export password when it crosses the wire —
+ * the popup receives ciphertext, never a plaintext seed.
+ */
+export type ExportCodexResponse =
+  | { readonly ok: true; readonly json: string }
+  | { readonly ok: false; readonly reason: string };
+
 export type ImportCodexResponse =
   | {
       readonly ok: true;
@@ -377,6 +416,7 @@ export type Response =
   | ListWalletsResponse
   | ListPureKeypairsResponse
   | ImportCodexResponse
+  | ExportCodexResponse
   | SignTxResponse
   | SignMessageResponse
   | UrStoaOpResponse;
@@ -400,6 +440,8 @@ export type ResponseFor<T extends RequestType> = T extends 'isUnlocked'
               ? AddAccountResponse
               : T extends 'removeAccount' | 'renameWallet'
                 ? AckResponse | Failure
+                : T extends 'exportCodex'
+                  ? ExportCodexResponse
                 : T extends 'importCodex'
                   ? ImportCodexResponse
                   : T extends 'getActiveAccount'

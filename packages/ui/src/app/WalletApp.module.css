@@ -327,3 +327,9 @@
   font-size: 0.875rem;
   line-height: 1.5;
 }
+
+/* The onboarding flow renders directly beneath the mode toggle; without this the
+   flow's first heading collides with the last mode button. */
+.modeToggle {
+  margin-bottom: 1.5rem;
+}

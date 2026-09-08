@@ -12,3 +12,13 @@ export {
   type ImportCodexOutcome,
   type ImportCodexFailure,
 } from './importCodex';
+
+export {
+  buildCodexExport,
+  type BuildCodexExportInput,
+  type BuildCodexExportDeps,
+  type BuildCodexExportOutcome,
+  type CodexExportDocument,
+  type CodexExportSeed,
+  type CodexExportPureKey,
+} from './buildCodexExport';

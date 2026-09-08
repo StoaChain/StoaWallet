@@ -185,6 +185,10 @@ export {
   type GaslessResultArtifact,
 } from './gasless';
 
+// The Yin Engine live gas floor — the time-varying minimum gas price every
+// transaction must meet. Replaces the static GAS_PRICE_MIN_ANU.
+export * from './gas';
+
 // Platform-agnostic storage contracts, the persisted-key registry, and the
 // biometric-unlock contract. Single-sourced through the storage sub-barrel.
 export * from './storage';

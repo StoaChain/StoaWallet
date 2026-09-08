@@ -45,6 +45,7 @@ export {
   KeyringManager,
   InvalidMnemonicError,
   WalletLockedError,
+  VaultAlreadyExistsError,
   BiometricUnlockFailedError,
   type KeyringManagerDeps,
   type OnboardOptions,

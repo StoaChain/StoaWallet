@@ -108,6 +108,13 @@ export interface ImportCodexDeps {
   genId: (kind: 'wallet' | 'key') => string;
   /** An ISO timestamp (`Date.now`-free for determinism in tests). */
   now: () => string;
+  /**
+   * Optional progress sink, called once per SEED and once per PURE KEY as each
+   * finishes. `total` is the sum of both up front, because each item costs a
+   * password-KDF round and the two loops run back to back — a bar driven by
+   * seeds alone would sit at 100% while the keys were still decrypting.
+   */
+  onProgress?: (done: number, total: number) => void;
 }
 
 /**
@@ -233,10 +240,21 @@ export async function importCodex(
   let accountsImported = 0;
   let skipped = 0;
 
+  // Both denominators are known before any work starts, so the bar is
+  // DETERMINATE from the first tick rather than a spinner that guesses.
+  const progressTotal =
+    exp.kadenaWallets.length + (exp.pureKeypairs?.length ?? 0);
+  let progressDone = 0;
+  const tick = (): void => {
+    progressDone += 1;
+    deps.onProgress?.(progressDone, progressTotal);
+  };
+
   try {
     for (const rawSeed of exp.kadenaWallets) {
       if (!isValidSeed(rawSeed)) {
         skipped += 1;
+        tick();
         continue;
       }
       const accounts = rawSeed.accounts
@@ -244,6 +262,7 @@ export async function importCodex(
         .filter((a): a is StoredAccount => a !== null);
       if (accounts.length === 0) {
         skipped += 1;
+        tick();
         continue;
       }
 
@@ -260,6 +279,7 @@ export async function importCodex(
         // Nothing new AND the name already matches → truly already present.
         if (newAccounts.length === 0 && name === match.name) {
           skipped += 1;
+          tick();
           continue;
         }
         merges.push({ walletId: match.id, name, accounts: newAccounts });
@@ -269,6 +289,7 @@ export async function importCodex(
         });
         match.name = name; // adopt for subsequent same-seed comparisons
         accountsImported += newAccounts.length;
+        tick();
         continue;
       }
 
@@ -289,6 +310,7 @@ export async function importCodex(
       existing.push({ id, name, pubs: new Set(accounts.map((a) => a.publicKey)) });
       accounts.forEach((a) => seen.add(a.publicKey));
       accountsImported += accounts.length;
+      tick();
     }
 
     for (const rawKey of exp.pureKeypairs ?? []) {
@@ -299,11 +321,13 @@ export async function importCodex(
         typeof (rawKey as CodexPureKeypair).encryptedPrivateKey !== 'string'
       ) {
         skipped += 1;
+        tick();
         continue;
       }
       const key = rawKey as CodexPureKeypair;
       if (!PUBKEY_RE.test(key.publicKey) || seen.has(key.publicKey)) {
         skipped += 1;
+        tick();
         continue;
       }
       const privateKey = await deps.decrypt(key.encryptedPrivateKey);
@@ -315,6 +339,7 @@ export async function importCodex(
         createdAt: deps.now(),
       });
       seen.add(key.publicKey);
+      tick();
     }
   } catch {
     // The ONLY async failure here is a decrypt rejection — a wrong codex password
