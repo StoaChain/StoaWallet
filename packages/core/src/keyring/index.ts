@@ -46,6 +46,7 @@ export {
   InvalidMnemonicError,
   WalletLockedError,
   VaultAlreadyExistsError,
+  LastWalletError,
   BiometricUnlockFailedError,
   type KeyringManagerDeps,
   type OnboardOptions,

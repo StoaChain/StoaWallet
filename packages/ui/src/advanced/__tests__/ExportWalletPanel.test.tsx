@@ -75,6 +75,12 @@ function makeVault(
       v.exportCalls.push(pw);
       return exportImpl(pw, onProgress);
     }) as RemoteVault['exportCodex'],
+    async removeWallet() {
+      return { ok: true as const };
+    },
+    async removePureKeypair() {
+      return { ok: true as const };
+    },
   };
   return v as RemoteVault & { exportCalls: string[] };
 }

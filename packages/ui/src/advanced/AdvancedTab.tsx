@@ -64,6 +64,8 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
     addAccount,
     addAccountAtIndex,
     removeAccount,
+    removeWallet,
+    removePureKeypair,
     renameWallet,
     importCodex,
     listPureKeypairs,
@@ -260,6 +262,8 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
             showSwitch={false}
             collapsed={collapsed.has(active.id)}
             onToggleCollapsed={() => toggleCollapsed(active.id)}
+            canRemove={false}
+            onRemove={() => undefined}
             onAddAccount={() => run(active.id, addAccount)}
             onAddAtIndex={(i) => run(active.id, () => addAccountAtIndex(active.id, i))}
             onUseSeed={() => undefined}
@@ -302,6 +306,16 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
               showSwitch
               collapsed={collapsed.has(w.id)}
               onToggleCollapsed={() => toggleCollapsed(w.id)}
+              canRemove={wallets.length > 1}
+              onRemove={() =>
+                mutate(async () => {
+                  const res = await removeWallet(w.id);
+                  if (!res.ok && res.reason === 'last-wallet') {
+                    setNotice('The last remaining seed cannot be removed.');
+                  }
+                  return res;
+                })
+              }
               onAddAccount={() => run(w.id, addAccount)}
               onAddAtIndex={(i) => run(w.id, () => addAccountAtIndex(w.id, i))}
               onUseSeed={() => run(w.id, async () => ({ ok: true }))}
@@ -312,7 +326,13 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
               onRename={(name) => mutate(() => renameWallet(w.id, name))}
             />
           ))}
-          {pureKeys.length > 0 && <PureKeysPanel keys={pureKeys} />}
+          {pureKeys.length > 0 && (
+            <PureKeysPanel
+              keys={pureKeys}
+              busy={busy}
+              onRemove={(id) => mutate(() => removePureKeypair(id))}
+            />
+          )}
         </div>
       )}
     </section>
@@ -326,6 +346,8 @@ function SeedCard({
   showSwitch,
   collapsed,
   onToggleCollapsed,
+  canRemove,
+  onRemove,
   onAddAccount,
   onAddAtIndex,
   onUseSeed,
@@ -339,6 +361,13 @@ function SeedCard({
   /** When true the account list and add-controls are hidden; the head stays. */
   readonly collapsed: boolean;
   readonly onToggleCollapsed: () => void;
+  /**
+   * Whether this seed may be removed. False for the last remaining seed — and
+   * the control is HIDDEN rather than disabled, since nothing short of adding
+   * another seed could make it available.
+   */
+  readonly canRemove: boolean;
+  readonly onRemove: () => void;
   readonly onAddAccount: () => void;
   readonly onAddAtIndex: (index: number) => void;
   readonly onUseSeed: () => void;
@@ -350,6 +379,8 @@ function SeedCard({
   const [indexInput, setIndexInput] = useState('');
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(wallet.name);
+  // Removal destroys the encrypted seed, so it takes a second, explicit click.
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
 
   const commitRename = (): void => {
     const next = nameDraft.trim();
@@ -454,6 +485,45 @@ function SeedCard({
             Use this seed
           </button>
         )}
+        {canRemove &&
+          (confirmingRemove ? (
+            <span className={styles.removeConfirm}>
+              <span className={styles.removePrompt}>Remove seed?</span>
+              <button
+                type="button"
+                className={styles.removeConfirmButton}
+                data-testid={`remove-seed-confirm-${wallet.id}`}
+                disabled={busy}
+                onClick={() => {
+                  setConfirmingRemove(false);
+                  onRemove();
+                }}
+              >
+                Remove
+              </button>
+              <button
+                type="button"
+                className={styles.removeCancelButton}
+                data-testid={`remove-seed-cancel-${wallet.id}`}
+                disabled={busy}
+                onClick={() => setConfirmingRemove(false)}
+              >
+                Keep
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              className={styles.removeButton}
+              data-testid={`remove-seed-${wallet.id}`}
+              aria-label="Remove seed"
+              title="Remove seed"
+              disabled={busy}
+              onClick={() => setConfirmingRemove(true)}
+            >
+              ✕
+            </button>
+          ))}
       </div>
 
       {/* Collapsed hides the long account list AND the add-controls, leaving
@@ -572,9 +642,16 @@ function SeedCard({
  * account path, so this section just surfaces them so they're visible + usable. */
 function PureKeysPanel({
   keys,
+  busy,
+  onRemove,
 }: {
   readonly keys: readonly RemotePureKeypair[];
+  readonly busy: boolean;
+  /** Remove by vault id. Destroys the encrypted private key. */
+  readonly onRemove: (id: string) => void;
 }): ReactNode {
+  // At most one row is ever mid-confirmation.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   return (
     <div className={styles.pureKeysPanel} data-testid="pure-keys-panel">
       <h2 className={styles.pureKeysHeading}>Pure keys</h2>
@@ -593,6 +670,43 @@ function PureKeysPanel({
             <span className={styles.pureKeyAddr} title={k.account}>
               {shortAddress(k.account)}
             </span>
+            {confirmingId === k.id ? (
+              <span className={styles.removeConfirm}>
+                <button
+                  type="button"
+                  className={styles.removeConfirmButton}
+                  data-testid={`remove-pure-key-confirm-${k.publicKey}`}
+                  disabled={busy}
+                  onClick={() => {
+                    setConfirmingId(null);
+                    onRemove(k.id);
+                  }}
+                >
+                  Remove
+                </button>
+                <button
+                  type="button"
+                  className={styles.removeCancelButton}
+                  data-testid={`remove-pure-key-cancel-${k.publicKey}`}
+                  disabled={busy}
+                  onClick={() => setConfirmingId(null)}
+                >
+                  Keep
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                className={styles.removeButton}
+                data-testid={`remove-pure-key-${k.publicKey}`}
+                aria-label="Remove pure key"
+                title="Remove pure key"
+                disabled={busy}
+                onClick={() => setConfirmingId(k.id)}
+              >
+                ✕
+              </button>
+            )}
           </li>
         ))}
       </ul>

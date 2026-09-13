@@ -35,6 +35,9 @@ const REASON_COPY: Record<WalletActionReason, string> = {
   'invalid-words': 'The recovery phrase contains invalid words.',
   'no-wallet': 'No wallet was found to save.',
   locked: 'The wallet is locked. Unlock it and try again.',
+  // Unreachable while creating a wallet — only seed removal returns it — but the
+  // map is exhaustive over WalletActionReason, so every reason needs copy.
+  'last-wallet': 'The last remaining seed cannot be removed.',
   unknown: 'Something went wrong while creating your wallet.',
 };
 

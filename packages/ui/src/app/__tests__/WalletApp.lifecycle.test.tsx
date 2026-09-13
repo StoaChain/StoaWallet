@@ -116,6 +116,15 @@ function makeFakeVault(initialUnlocked: boolean): RemoteVault & {
     async importCodex() {
       return { ok: true as const, summary: { seedsImported: 0, accountsImported: 0, keysImported: 0, skipped: 0 } };
     },
+    async exportCodex() {
+      return { ok: true as const, json: '{}' };
+    },
+    async removeWallet() {
+      return { ok: true as const };
+    },
+    async removePureKeypair() {
+      return { ok: true as const };
+    },
   };
 }
 

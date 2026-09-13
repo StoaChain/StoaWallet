@@ -74,7 +74,7 @@ describe('WalletApp', () => {
 
   it('offers Import Codex as a THIRD first-run option, not only inside Advanced', async () => {
     const storage = new InMemoryStorageAdapter();
-    renderApp(storage);
+    renderApp(storage, new InMemoryKeyVault());
 
     // A codex holder has no 24-word phrase to type, so without this button the
     // only way in would be to create a throwaway wallet first just to reach the
@@ -88,7 +88,7 @@ describe('WalletApp', () => {
 
   it('opens the codex flow when Import Codex is chosen', async () => {
     const storage = new InMemoryStorageAdapter();
-    renderApp(storage);
+    renderApp(storage, new InMemoryKeyVault());
 
     await waitFor(() => screen.getByRole('tab', { name: /import codex/i }));
     await act(async () => {

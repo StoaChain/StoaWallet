@@ -623,3 +623,62 @@
 .collapseToggle:hover {
   color: var(--color-stoa-gold);
 }
+
+/* --- Removal ----------------------------------------------------------------
+   Removing a seed or pure key destroys encrypted key material, so the control
+   is a quiet glyph that expands into an explicit Remove / Keep pair rather than
+   acting on one click. Remove is pushed to the far end of the row, away from
+   the selection targets, to keep it out of the path of routine clicks. */
+.removeButton {
+  margin-left: auto;
+  padding: 0 0.35rem;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--color-stoa-slate);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.removeButton:hover:not(:disabled) {
+  color: var(--color-stoa-error, #e5484d);
+}
+
+.removeConfirm {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.removePrompt {
+  font-size: 0.75rem;
+  color: var(--color-stoa-slate);
+}
+
+.removeConfirmButton,
+.removeCancelButton {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+}
+
+.removeConfirmButton {
+  color: var(--color-stoa-error, #e5484d);
+  border: 1px solid var(--color-stoa-error, #e5484d);
+}
+
+.removeCancelButton {
+  color: var(--color-stoa-slate);
+  border: 1px solid var(--color-stoa-border);
+}
+
+.removeConfirmButton:disabled,
+.removeCancelButton:disabled,
+.removeButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

@@ -117,6 +117,15 @@ function makeVault(over: Partial<RemoteVault> = {}): RemoteVault & {
         summary: { seedsImported: 1, accountsImported: 2, keysImported: 1, skipped: 0 },
       };
     },
+    async exportCodex() {
+      return { ok: true as const, json: '{}' };
+    },
+    async removeWallet() {
+      return { ok: true as const };
+    },
+    async removePureKeypair() {
+      return { ok: true as const };
+    },
     ...over,
   };
   return v;

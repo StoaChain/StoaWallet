@@ -37,6 +37,7 @@ function mapReason(reason: FailureReason): WalletActionReason {
     case 'unsupported-format':
     case 'locked':
     case 'no-wallet':
+    case 'last-wallet':
       return reason;
     default:
       return 'unknown';
@@ -161,6 +162,18 @@ export class BackgroundKeyVaultProxy implements RemoteVault {
   /** Remove a derived account (index #0 is rejected host-side); ack/failure. */
   async removeAccount(walletId: string, index: number): Promise<RemoteUnlockResult> {
     const res = await this.send({ type: 'removeAccount', walletId, index });
+    return res.ok ? { ok: true } : { ok: false, reason: mapReason(res.reason) };
+  }
+
+  /** Remove a seed in the worker (destroys its encrypted mnemonic). */
+  async removeWallet(walletId: string): Promise<RemoteUnlockResult> {
+    const res = await this.send({ type: 'removeWallet', walletId });
+    return res.ok ? { ok: true } : { ok: false, reason: mapReason(res.reason) };
+  }
+
+  /** Remove a pure keypair in the worker (destroys its encrypted private key). */
+  async removePureKeypair(id: string): Promise<RemoteUnlockResult> {
+    const res = await this.send({ type: 'removePureKeypair', id });
     return res.ok ? { ok: true } : { ok: false, reason: mapReason(res.reason) };
   }
 

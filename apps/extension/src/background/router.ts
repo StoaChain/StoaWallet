@@ -125,6 +125,8 @@ function reasonForError(error: unknown): FailureReason {
     case 'CorruptVaultError':
       // No usable vault to act on — the popup should onboard, not retry a pw.
       return 'no-wallet';
+    case 'LastWalletError':
+      return 'last-wallet';
     default:
       return 'corrupt-envelope';
   }
@@ -559,6 +561,24 @@ export async function routeRequest(
       case 'renameWallet':
         // Renaming a seed touches non-secret vault metadata only; not gated on unlock.
         await manager.renameWallet(request.walletId, request.name);
+        return ok({});
+
+      case 'removeWallet':
+        // Destroys an ENCRYPTED SEED — unlike removeAccount (a re-derivable public
+        // record) — so it is gated on an unlocked vault. The manager refuses the
+        // last seed; LastWalletError maps to 'last-wallet' in reasonForError.
+        if (!keyVault.isUnlocked()) {
+          return err('locked');
+        }
+        await manager.removeWallet(request.walletId);
+        return ok({});
+
+      case 'removePureKeypair':
+        // Destroys an encrypted private key — gated on unlock like removeWallet.
+        if (!keyVault.isUnlocked()) {
+          return err('locked');
+        }
+        await manager.removePureKeypair(request.id);
         return ok({});
 
       case 'exportCodex': {

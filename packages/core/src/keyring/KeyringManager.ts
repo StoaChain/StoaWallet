@@ -142,6 +142,18 @@ export class VaultAlreadyExistsError extends Error {
 }
 
 /**
+ * Thrown by `removeWallet` when asked to remove the only remaining seed. A vault
+ * with zero seeds has no active wallet to point at and nothing to sign with —
+ * it would still "exist" (so onboarding is never offered again) yet be unusable.
+ */
+export class LastWalletError extends Error {
+  constructor() {
+    super('The last remaining seed cannot be removed.');
+    this.name = 'LastWalletError';
+  }
+}
+
+/**
  * Thrown by `unlockWithBiometric` when the `BiometricUnlock` backer returned a
  * `{ok:false}` result (unavailable / cancelled / failed). The biometric
  * CONTRACT itself never throws — it resolves a discriminated result — but the
@@ -662,6 +674,68 @@ export class KeyringManager {
         wallet.activeAccountIndex === index ? 0 : wallet.activeAccountIndex,
     };
     await this.persist(this.replaceWalletInVault(vault, nextWallet));
+  }
+
+  /**
+   * REMOVE a seed from the vault, destroying its encrypted mnemonic.
+   *
+   * Unlike {@link removeAccount} — which drops a re-derivable public record —
+   * this destroys key material, so it requires an unlocked wallet as proof of
+   * ownership. The last remaining seed is refused ({@link LastWalletError}).
+   *
+   * Removing the ACTIVE seed re-points the vault at the first remaining seed.
+   * If it was also the UNLOCKED seed, the session is re-opened on that seed with
+   * the held password (every seed is sealed at the same wallet password) and the
+   * key vault is re-loaded — so the user is not bounced to the lock screen, and
+   * the removed seed's mnemonic does not linger in memory. The replacement is
+   * decrypted BEFORE the write, so a failure leaves the vault untouched.
+   */
+  async removeWallet(walletId: string): Promise<void> {
+    if (this.unlocked === null) {
+      throw new WalletLockedError();
+    }
+    const vault = await this.requireVault();
+    // Throws on an unknown id before anything is touched.
+    this.findWallet(vault, walletId);
+    if (vault.wallets.length <= 1) {
+      throw new LastWalletError();
+    }
+
+    const remaining = vault.wallets.filter((w) => w.id !== walletId);
+    const nextActiveId =
+      vault.activeWalletId === walletId ? remaining[0].id : vault.activeWalletId;
+
+    const held = this.unlocked;
+    let nextUnlocked = held;
+    if (held.walletId === walletId) {
+      const target = this.findWallet({ ...vault, wallets: remaining }, nextActiveId);
+      const mnemonic = await decryptPhrase(target.encryptedPhrase, held.password);
+      nextUnlocked = { walletId: target.id, mnemonic, password: held.password };
+    }
+
+    await this.persist({ ...vault, wallets: remaining, activeWalletId: nextActiveId });
+
+    if (nextUnlocked !== held) {
+      await this.keyVault.unlock(textEncoder.encode(nextUnlocked.mnemonic));
+      this.unlocked = nextUnlocked;
+    }
+  }
+
+  /**
+   * REMOVE a pure keypair from the vault, destroying its encrypted private key.
+   * Requires an unlocked wallet for the same reason as {@link removeWallet}.
+   * There is no last-key guard: a wallet with no pure keys is perfectly valid.
+   */
+  async removePureKeypair(id: string): Promise<void> {
+    if (this.unlocked === null) {
+      throw new WalletLockedError();
+    }
+    const vault = await this.requireVault();
+    const keys = pureKeypairsOf(vault);
+    if (!keys.some((k) => k.id === id)) {
+      throw new Error(`No pure keypair with id ${id} in the vault.`);
+    }
+    await this.persist({ ...vault, pureKeypairs: keys.filter((k) => k.id !== id) });
   }
 
   /**

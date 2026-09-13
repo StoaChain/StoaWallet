@@ -181,6 +181,10 @@ export interface RemoteVault {
   addAccountAtIndex(walletId: string, index: number): Promise<RemoteUnlockResult>;
   /** Remove a derived account from a seed (index #0 is rejected host-side); ack. */
   removeAccount(walletId: string, index: number): Promise<RemoteUnlockResult>;
+  /** Remove a seed (destroys its encrypted mnemonic); refuses the last seed. */
+  removeWallet(walletId: string): Promise<RemoteUnlockResult>;
+  /** Remove a pure keypair (destroys its encrypted private key). */
+  removePureKeypair(id: string): Promise<RemoteUnlockResult>;
   /** Rename a seed (non-secret metadata); ack/failure. */
   renameWallet(walletId: string, name: string): Promise<RemoteUnlockResult>;
   /**
@@ -281,6 +285,8 @@ export type WalletActionReason =
   | 'invalid-words'
   | 'no-wallet'
   | 'locked'
+  /** A removal was refused because it targeted the vault's last seed. */
+  | 'last-wallet'
   | 'unknown';
 
 export type WalletActionResult =
@@ -532,6 +538,13 @@ export interface WalletContextValue {
   addAccountAtIndex(walletId: string, index: number): Promise<WalletActionResult>;
   /** Remove a derived account from a seed. Account #0 cannot be removed. */
   removeAccount(walletId: string, index: number): Promise<WalletActionResult>;
+  /**
+   * Remove a seed, destroying its encrypted mnemonic. Refused while locked and
+   * for the last remaining seed (`last-wallet`).
+   */
+  removeWallet(walletId: string): Promise<WalletActionResult>;
+  /** Remove a pure keypair, destroying its encrypted private key. */
+  removePureKeypair(id: string): Promise<WalletActionResult>;
   /** Rename a seed (wallet); mirrors the updated summary. */
   renameWallet(walletId: string, name: string): Promise<WalletActionResult>;
   /**
@@ -794,6 +807,11 @@ function reasonForUnlockError(error: unknown): WalletActionReason {
  * else falls through to `unknown`.
  */
 function reasonForActionError(error: unknown): WalletActionReason {
+  // Matched by name, like the background router, so a duplicated class across
+  // package copies still classifies.
+  const name = error instanceof Error ? error.name : '';
+  if (name === 'LastWalletError') return 'last-wallet';
+  if (name === 'WalletLockedError') return 'locked';
   const message = error instanceof Error ? error.message : '';
   if (message.includes('must be unlocked')) {
     return 'locked';
@@ -1336,6 +1354,45 @@ export function WalletProvider({
       }
     },
     [manager, syncActiveSelection, remoteVault, syncRemoteSelection],
+  );
+
+  const removeWallet = useCallback(
+    async (walletId: string): Promise<WalletActionResult> => {
+      if (remoteVault !== undefined) {
+        const result = await remoteVault.removeWallet(walletId);
+        if (result.ok) {
+          // Removing the active seed re-points the vault; re-read it so the
+          // header does not keep naming a seed that no longer exists.
+          await refreshFromStorage();
+          await syncRemoteSelection();
+        }
+        return result;
+      }
+      try {
+        await manager.removeWallet(walletId);
+        await refreshFromStorage();
+        syncActiveSelection();
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, reason: reasonForActionError(error) };
+      }
+    },
+    [manager, refreshFromStorage, syncActiveSelection, remoteVault, syncRemoteSelection],
+  );
+
+  const removePureKeypair = useCallback(
+    async (id: string): Promise<WalletActionResult> => {
+      if (remoteVault !== undefined) {
+        return remoteVault.removePureKeypair(id);
+      }
+      try {
+        await manager.removePureKeypair(id);
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, reason: reasonForActionError(error) };
+      }
+    },
+    [manager, remoteVault],
   );
 
   const renameWallet = useCallback(
@@ -1953,6 +2010,8 @@ export function WalletProvider({
     switchWallet,
     addAccountAtIndex,
     removeAccount,
+    removeWallet,
+    removePureKeypair,
     renameWallet,
     importCodex,
     exportCodex,

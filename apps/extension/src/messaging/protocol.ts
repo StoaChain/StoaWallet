@@ -196,6 +196,10 @@ export type Request =
   | { readonly type: 'addAccountAtIndex'; readonly walletId: string; readonly index: number }
   | { readonly type: 'removeAccount'; readonly walletId: string; readonly index: number }
   | { readonly type: 'renameWallet'; readonly walletId: string; readonly name: string }
+  /** Destroys an encrypted seed — refused when locked, and for the last seed. */
+  | { readonly type: 'removeWallet'; readonly walletId: string }
+  /** Destroys an encrypted private key — refused when locked. */
+  | { readonly type: 'removePureKeypair'; readonly id: string }
   | {
       readonly type: 'exportCodex';
       /** The password the EXPORT FILE is sealed at — never the wallet password. */
@@ -237,7 +241,9 @@ export type FailureReason =
   | 'locked'
   | 'no-wallet'
   | 'unauthorized'
-  | 'unsupported-signer';
+  | 'unsupported-signer'
+  /** removeWallet refused: the vault's only remaining seed cannot be removed. */
+  | 'last-wallet';
 
 /** A JSON-safe view of an account record the popup renders. */
 export interface WireAccount {
@@ -438,7 +444,7 @@ export type ResponseFor<T extends RequestType> = T extends 'isUnlocked'
             ? AckResponse | Failure
             : T extends 'addAccountAtIndex'
               ? AddAccountResponse
-              : T extends 'removeAccount' | 'renameWallet'
+              : T extends 'removeAccount' | 'renameWallet' | 'removeWallet' | 'removePureKeypair'
                 ? AckResponse | Failure
                 : T extends 'exportCodex'
                   ? ExportCodexResponse
