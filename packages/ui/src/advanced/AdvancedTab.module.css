@@ -507,6 +507,16 @@
   transition: width 160ms ease-out;
 }
 
+/* A finished import keeps its bar, full, beside the result line: a bar that
+   vanishes the moment the work ends reads as nothing having happened. */
+.codexProgressDone {
+  background: var(--color-status-success, #4ade80);
+}
+
+.importResult {
+  color: var(--color-status-success, #4ade80);
+}
+
 /* --- File picker -----------------------------------------------------------
    The native `<input type="file">` cannot be styled, so it is kept in the DOM
    (still focusable, still the thing that opens the dialog and fires change) but

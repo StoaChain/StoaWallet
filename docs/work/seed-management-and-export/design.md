@@ -120,6 +120,10 @@ AC9 gates every topic.
 - **An imported pure key must derive its public key** (64-hex Ed25519, or the
   128-hex Chainweaver extended key). A key already in the vault, as a pure key
   or as a seed account, is refused (`duplicate-key`).
+- **The Key #0 preview derives with an empty password**, exactly as Codex does.
+  The public key does not depend on the password, but the cost does: a non-empty
+  one made each 12-word preview take ~1.5-3s instead of ~0.3s, freezing the popup
+  on every "Generate new phrase".
 
 ## Out of scope
 

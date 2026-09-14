@@ -56,7 +56,10 @@ describe('importCodex progress reporting', () => {
     expect(res.ok).toBe(true);
     // The KDF cost is per item and the two loops run back to back, so a bar
     // driven by seeds alone would stall at 100% while the keys still decrypt.
+    // The opening [0, total] tick gives the bar its count before the first item's
+    // KDF rounds finish, instead of showing no count while they run.
     expect(ticks).toEqual([
+      [0, 5],
       [1, 5],
       [2, 5],
       [3, 5],

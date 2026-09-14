@@ -249,6 +249,9 @@ export async function importCodex(
     progressDone += 1;
     deps.onProgress?.(progressDone, progressTotal);
   };
+  // Announce the size before the first item: that item costs two full KDF rounds,
+  // and a bar with no count until it finishes looks like nothing is happening.
+  if (progressTotal > 0) deps.onProgress?.(0, progressTotal);
 
   try {
     for (const rawSeed of exp.kadenaWallets) {

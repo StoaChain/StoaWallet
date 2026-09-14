@@ -327,10 +327,12 @@ describe('AdvancedTab', () => {
       json: '{"version":"1.2"}',
       pw: 'codex-pw',
     });
+    // The result lands INSIDE the import panel, beside the button just pressed —
+    // not only at the top of the tab, which is out of view from there.
     await waitFor(() =>
-      expect(screen.getByTestId('advanced-notice')).toHaveTextContent(
-        /Imported 1 seed/i,
-      ),
+      expect(
+        within(screen.getByTestId('import-codex-panel')).getByTestId('codex-import-result'),
+      ).toHaveTextContent('Imported 1 seed, 2 accounts and 1 key.'),
     );
   });
 
@@ -443,7 +445,7 @@ describe('AdvancedTab', () => {
       fireEvent.click(screen.getByTestId('codex-import-submit'));
     });
     await waitFor(() =>
-      expect(screen.getByTestId('advanced-notice')).toBeInTheDocument(),
+      expect(screen.getByTestId('codex-import-result')).toBeInTheDocument(),
     );
 
     // The import persisted advanced mode: it survives the reopen...
@@ -461,7 +463,90 @@ describe('AdvancedTab', () => {
       expect(screen.getByTestId('advanced-mode-toggle')).not.toBeChecked(),
     );
   });
+
+  it('shows the item count as soon as the import starts, then keeps a full bar with the result', async () => {
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const vault = makeVault({
+      async importCodex(
+        _json: string,
+        _pw: string,
+        onProgress?: (done: number, total: number) => void,
+      ) {
+        onProgress?.(0, 3);
+        await gate;
+        onProgress?.(3, 3);
+        return {
+          ok: true as const,
+          summary: { seedsImported: 2, accountsImported: 4, keysImported: 1, skipped: 0 },
+        };
+      },
+    });
+    renderTab(vault);
+    await submitCodexImport();
+
+    // Mid-import: a determinate bar with the real count, beside the button.
+    await waitFor(() =>
+      expect(screen.getByTestId('codex-import-progress-label')).toHaveTextContent(
+        'Importing 0 of 3…',
+      ),
+    );
+    expect(screen.getByTestId('codex-import-submit')).toHaveTextContent('Importing…');
+
+    await act(async () => {
+      finish();
+    });
+
+    // Finished: the bar stays, full, with what the import did. A bar that
+    // vanished the moment the work ended read as no feedback at all.
+    await waitFor(() =>
+      expect(screen.getByTestId('codex-import-result')).toHaveTextContent(
+        'Imported 2 seeds, 4 accounts and 1 key.',
+      ),
+    );
+    expect(screen.queryByTestId('codex-import-progress')).toBeNull();
+  });
+
+  it('reports a Codex with nothing new as a finished check, not an error', async () => {
+    const vault = makeVault({
+      async importCodex() {
+        return { ok: false as const, reason: 'no-importable-content' };
+      },
+    });
+    renderTab(vault);
+    await submitCodexImport();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('codex-import-result')).toHaveTextContent(
+        /already in the wallet/i,
+      ),
+    );
+    expect(screen.queryByTestId('import-error')).toBeNull();
+  });
 });
+
+/** Open Backup, stage a Codex file and its password, and press Import. */
+async function submitCodexImport(): Promise<void> {
+  await waitFor(() => screen.getByTestId('seed-wallet-1'));
+  await act(async () => {
+    fireEvent.click(screen.getByTestId('advanced-subtab-backup'));
+  });
+  await act(async () => {
+    fireEvent.change(screen.getByTestId('codex-file'), {
+      target: { files: [new File(['{"version":"1.2"}'], 'OuronetCodex.json')] },
+    });
+  });
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText(/codex password/i), {
+      target: { value: 'codex-pw' },
+    });
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByTestId('codex-import-submit'));
+  });
+}
 
 describe('AdvancedTab — sub-tabs and collapsing', () => {
   it('splits into Accounts & Seeds and Backup tabs, seeds shown first', async () => {

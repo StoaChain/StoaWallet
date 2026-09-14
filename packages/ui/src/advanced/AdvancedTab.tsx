@@ -173,16 +173,10 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
           setCodexProgress([done, total]),
         );
         if (result.ok) {
-          const { seedsImported, accountsImported, keysImported } = result.summary;
-          const parts: string[] = [];
-          if (seedsImported > 0) parts.push(`${seedsImported} seed(s)`);
-          if (accountsImported > 0) parts.push(`${accountsImported} account(s)`);
-          if (keysImported > 0) parts.push(`${keysImported} key(s)`);
-          setNotice(
-            parts.length === 0
-              ? 'Nothing new to import — those seeds/keys are already here.'
-              : `Imported ${parts.join(', ')}.`,
-          );
+          // The import panel shows the summary itself, beside the button the user
+          // pressed. A tab-level notice sits above the sub-tabs, out of view from
+          // the Import button, and read as no feedback at all.
+          //
           // The vault now holds codex seeds, so PERSIST advanced mode — the
           // multi-seed view must survive the next popup open. A codex-ORIGIN
           // wallet is forced on separately; this covers the seed-origin wallet
@@ -760,10 +754,23 @@ function ImportCodexPanel({
   const [fileName, setFileName] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  /** What the last import did, kept beside the button until the next attempt. */
+  const [result, setResult] = useState<ImportResult | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const statusRef = useRef<HTMLDivElement | null>(null);
+
+  // Scroll the bar, then the result, into view. The popup is usually scrolled
+  // down to the Import button, and a status the user cannot see is no feedback.
+  const importing = progress !== null;
+  useEffect(() => {
+    if (importing || result !== null) {
+      statusRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [importing, result]);
 
   const onFile = async (file: File | undefined): Promise<void> => {
     setError(null);
+    setResult(null);
     if (file === undefined) return;
     setFileName(file.name);
     setJson(await readFileText(file));
@@ -771,12 +778,19 @@ function ImportCodexPanel({
 
   const onSubmit = async (): Promise<void> => {
     if (json === null || password === '') return;
-    const result = await onImport(json, password);
-    if (!result.ok) {
-      setError(IMPORT_REASON_TEXT[result.reason] ?? 'Import failed.');
+    setError(null);
+    setResult(null);
+    const outcome = await onImport(json, password);
+    if (outcome.ok) {
+      setResult(describeImport(outcome.summary));
+    } else if (outcome.reason === 'no-importable-content') {
+      // Everything in the codex is already here: a finished check, not a failure.
+      setResult({ text: NOTHING_NEW_TEXT, added: false });
+    } else {
+      setError(IMPORT_REASON_TEXT[outcome.reason] ?? 'Import failed.');
       return;
     }
-    // Success — clear the sensitive password + the staged file.
+    // Done — clear the sensitive password + the staged file.
     setPassword('');
     setJson(null);
     setFileName(null);
@@ -828,6 +842,7 @@ function ImportCodexPanel({
       )}
       {progress !== null && (
         <div
+          ref={statusRef}
           className={styles.codexProgress}
           data-testid="codex-import-progress"
           role="progressbar"
@@ -851,6 +866,22 @@ function ImportCodexPanel({
           </span>
         </div>
       )}
+      {progress === null && result !== null && (
+        <div
+          ref={statusRef}
+          className={styles.codexProgress}
+          role="status"
+          data-testid="codex-import-result"
+        >
+          <div className={styles.codexProgressTrack}>
+            <div
+              className={`${styles.codexProgressFill} ${result.added ? styles.codexProgressDone : ''}`}
+              style={{ width: '100%' }}
+            />
+          </div>
+          <span className={result.added ? styles.importResult : undefined}>{result.text}</span>
+        </div>
+      )}
       <button
         type="button"
         className={styles.importButton}
@@ -862,6 +893,35 @@ function ImportCodexPanel({
       </button>
     </div>
   );
+}
+
+/** A finished import, in words, and whether it added anything. */
+interface ImportResult {
+  readonly text: string;
+  readonly added: boolean;
+}
+
+const NOTHING_NEW_TEXT =
+  'Nothing new to import — everything in this Codex is already in the wallet.';
+
+/** Summarise what an import added, e.g. "Imported 1 seed, 2 accounts and 1 key." */
+function describeImport(
+  summary: Extract<RemoteImportCodexResult, { ok: true }>['summary'],
+): ImportResult {
+  const parts: string[] = [];
+  if (summary.seedsImported > 0) parts.push(countOf(summary.seedsImported, 'seed'));
+  if (summary.accountsImported > 0) parts.push(countOf(summary.accountsImported, 'account'));
+  if (summary.keysImported > 0) parts.push(countOf(summary.keysImported, 'key'));
+  if (parts.length === 0) return { text: NOTHING_NEW_TEXT, added: false };
+  const list =
+    parts.length === 1
+      ? parts[0]
+      : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+  return { text: `Imported ${list}.`, added: true };
+}
+
+function countOf(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? '' : 's'}`;
 }
 
 /** Human text for each import failure reason (secret-free). */

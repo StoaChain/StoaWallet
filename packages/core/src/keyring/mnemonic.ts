@@ -149,31 +149,35 @@ export async function validateMnemonicFor(
 }
 
 /**
- * A throwaway password for deriving a preview. The Key #0 PUBLIC key does not
- * depend on the password (only the sealed secret does), so the preview shows the
- * exact k: address the seed produces once saved — with no real password involved.
- */
-const PREVIEW_PASSWORD = 'stoawallet-key-preview';
-
-/**
  * Key #0's public key for a phrase, or `null` if the phrase is not valid for
- * `seedType`. Drives the live preview in the add-seed flow, as in Codex.
+ * `seedType`. Drives the live preview in the add-seed flow.
+ *
+ * Derives with an EMPTY password, exactly as Ouronet Codex does. The public key
+ * does not depend on the password (only the sealed secret does, and the preview
+ * discards it), but the cost does: with a non-empty password a 12-word
+ * Chainweaver/EckoWallet preview measured ~1.5-3s against ~0.3s, freezing the
+ * popup on every "Generate new phrase".
+ *
+ * Only the cheap checks (word count, wordlist) run first. The SDK verifies the
+ * checksum itself while deriving, so it is not checked twice.
  */
 export async function previewSeedPublicKey(
   mnemonic: string,
   seedType: SeedType,
 ): Promise<string | null> {
-  const validation = await validateMnemonicFor(mnemonic, seedType);
-  if (!validation.valid) return null;
+  const { kept, hadEmptyToken } = tokenize(mnemonic);
+  if (hadEmptyToken || kept.length !== WORD_COUNT_BY_SEED_TYPE[seedType]) return null;
+  if (!kept.every((word) => ENGLISH_WORDS.has(word))) return null;
   try {
     const { publicKey } = await KadenaWalletBuilder.createWalletPairFromMnemonic(
-      PREVIEW_PASSWORD,
-      tokenize(mnemonic).kept.join(' '),
+      '',
+      kept.join(' '),
       0,
       seedType,
     );
     return publicKey;
   } catch {
+    // A bad checksum: the SDK rejects the phrase for this seed type.
     return null;
   }
 }

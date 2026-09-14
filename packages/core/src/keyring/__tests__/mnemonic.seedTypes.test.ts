@@ -89,4 +89,32 @@ describe('seed-type-aware mnemonic helpers', () => {
 
     expect(await previewSeedPublicKey(koala, 'chainweaver')).toBeNull();
   });
+
+  it.each([
+    ['koala', 24],
+    ['chainweaver', 12],
+  ] as const)(
+    'previews nothing for a %s phrase of real words with a bad checksum',
+    async (seedType, count) => {
+      // All-"abandon" fails the checksum at both lengths (the valid phrases end
+      // in "art" and "about"), so only the derivation's own check can catch it.
+      const badChecksum = Array.from({ length: count }, () => 'abandon').join(' ');
+
+      expect(await previewSeedPublicKey(badChecksum, seedType)).toBeNull();
+    },
+  );
+
+  it('previews with an EMPTY password, exactly as Codex does', async () => {
+    // The public key is password-independent but the cost is not: a non-empty
+    // password made each 12-word preview ~1.5-3s instead of ~0.3s, freezing the
+    // popup on every "Generate new phrase".
+    const phrase = await generateMnemonicFor('chainweaver');
+    const derive = vi.spyOn(KadenaWalletBuilder, 'createWalletPairFromMnemonic');
+    try {
+      await previewSeedPublicKey(phrase, 'chainweaver');
+      expect(derive).toHaveBeenCalledWith('', phrase, 0, 'chainweaver');
+    } finally {
+      derive.mockRestore();
+    }
+  });
 });
