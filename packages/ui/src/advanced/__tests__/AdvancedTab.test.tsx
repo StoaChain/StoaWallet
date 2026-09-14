@@ -126,6 +126,12 @@ function makeVault(over: Partial<RemoteVault> = {}): RemoteVault & {
     async removePureKeypair() {
       return { ok: true as const };
     },
+    async addSeed() {
+      return { ok: true as const, walletId: 'wallet-new' };
+    },
+    async addPureKeypair() {
+      return { ok: true as const, id: 'key-new', publicKey: 'e'.repeat(64) };
+    },
     ...over,
   };
   return v;

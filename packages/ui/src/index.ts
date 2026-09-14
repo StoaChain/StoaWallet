@@ -73,6 +73,8 @@ export { CreateWalletFlow, type CreateWalletFlowProps } from './onboarding/Creat
 export { ImportWalletFlow, type ImportWalletFlowProps } from './onboarding/ImportWalletFlow';
 export { ImportCodexFlow } from './onboarding/ImportCodexFlow';
 export { ExportWalletPanel } from './advanced/ExportWalletPanel';
+export { AddSeedPanel } from './advanced/AddSeedPanel';
+export { AddPureKeyPanel } from './advanced/AddPureKeyPanel';
 export { UnlockScreen, type UnlockScreenProps } from './wallet/UnlockScreen';
 export { AccountSwitcher, type AccountSwitcherProps } from './wallet/AccountSwitcher';
 

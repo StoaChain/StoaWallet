@@ -2,6 +2,8 @@ import * as bip39 from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 import { KadenaWalletBuilder } from '@stoachain/stoa-core/wallet';
 
+import type { SeedType } from './vault';
+
 /** The single mnemonic length the koala (BIP39) import path accepts. */
 const REQUIRED_WORD_COUNT = 24;
 
@@ -88,4 +90,90 @@ export function validateMnemonic(
   }
 
   return { valid: true };
+}
+
+/**
+ * Words per seed type: koala is 24-word BIP39; Chainweaver and EckoWallet are
+ * 12-word Kadena mnemonics. The count is enforced HERE, before any SDK check,
+ * because the SDK's `isValidMnemonic(phrase, seedType)` does not enforce it — it
+ * accepts a 24-word phrase as chainweaver, which would store a koala seed under
+ * the chainweaver derivation and silently produce the wrong keys.
+ */
+export const WORD_COUNT_BY_SEED_TYPE: Readonly<Record<SeedType, 12 | 24>> = {
+  koala: 24,
+  chainweaver: 12,
+  eckowallet: 12,
+};
+
+const ENGLISH_WORDS: ReadonlySet<string> = new Set(wordlist);
+
+/** Generate a fresh phrase of the right length for `seedType` via the SDK's CSPRNG. */
+export async function generateMnemonicFor(seedType: SeedType): Promise<string> {
+  return KadenaWalletBuilder.generateMnemonic(WORD_COUNT_BY_SEED_TYPE[seedType]);
+}
+
+/**
+ * Validate a candidate phrase for a SPECIFIC seed type, BEFORE any derivation or
+ * encryption. Normalizes like {@link validateMnemonic}, then:
+ *   1. exactly the type's word count, else `word-count`;
+ *   2. koala: a valid BIP39 phrase; chainweaver/eckowallet: every word in the
+ *      English wordlist AND the SDK's Kadena checksum — else `invalid-words`.
+ * Never throws: an SDK error on a malformed phrase is reported as invalid-words.
+ */
+export async function validateMnemonicFor(
+  words: string[] | string,
+  seedType: SeedType,
+): Promise<MnemonicValidation> {
+  const { kept, hadEmptyToken } = tokenize(words);
+  if (hadEmptyToken || kept.length !== WORD_COUNT_BY_SEED_TYPE[seedType]) {
+    return { valid: false, reason: 'word-count' };
+  }
+
+  const phrase = kept.join(' ');
+  if (seedType === 'koala') {
+    return bip39.validateMnemonic(phrase, wordlist)
+      ? { valid: true }
+      : { valid: false, reason: 'invalid-words' };
+  }
+
+  if (!kept.every((word) => ENGLISH_WORDS.has(word))) {
+    return { valid: false, reason: 'invalid-words' };
+  }
+  try {
+    return (await KadenaWalletBuilder.isValidMnemonic(phrase, seedType))
+      ? { valid: true }
+      : { valid: false, reason: 'invalid-words' };
+  } catch {
+    return { valid: false, reason: 'invalid-words' };
+  }
+}
+
+/**
+ * A throwaway password for deriving a preview. The Key #0 PUBLIC key does not
+ * depend on the password (only the sealed secret does), so the preview shows the
+ * exact k: address the seed produces once saved — with no real password involved.
+ */
+const PREVIEW_PASSWORD = 'stoawallet-key-preview';
+
+/**
+ * Key #0's public key for a phrase, or `null` if the phrase is not valid for
+ * `seedType`. Drives the live preview in the add-seed flow, as in Codex.
+ */
+export async function previewSeedPublicKey(
+  mnemonic: string,
+  seedType: SeedType,
+): Promise<string | null> {
+  const validation = await validateMnemonicFor(mnemonic, seedType);
+  if (!validation.valid) return null;
+  try {
+    const { publicKey } = await KadenaWalletBuilder.createWalletPairFromMnemonic(
+      PREVIEW_PASSWORD,
+      tokenize(mnemonic).kept.join(' '),
+      0,
+      seedType,
+    );
+    return publicKey;
+  } catch {
+    return null;
+  }
 }

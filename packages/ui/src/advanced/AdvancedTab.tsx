@@ -14,6 +14,8 @@ import {
 } from '../context/WalletContext';
 import { seedTypeChipStyle } from '../app/seedTypeConfig';
 import { ExportWalletPanel } from './ExportWalletPanel';
+import { AddSeedPanel } from './AddSeedPanel';
+import { AddPureKeyPanel } from './AddPureKeyPanel';
 import { PasswordInput } from '../components/PasswordInput';
 import styles from './AdvancedTab.module.css';
 
@@ -91,6 +93,8 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
    * silently hidden.
    */
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  /** Whether the Add seed panel is open. */
+  const [addingSeed, setAddingSeed] = useState(false);
 
   const toggleCollapsed = useCallback((id: string): void => {
     setCollapsed((prev) => {
@@ -283,6 +287,15 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
           <div className={styles.bulkControls}>
             <button
               type="button"
+              className={styles.addButton}
+              data-testid="add-seed-open"
+              disabled={addingSeed}
+              onClick={() => setAddingSeed(true)}
+            >
+              + Add seed
+            </button>
+            <button
+              type="button"
               className={styles.bulkButton}
               data-testid="expand-all-seeds"
               onClick={() => setCollapsed(new Set())}
@@ -298,6 +311,16 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
               Collapse all
             </button>
           </div>
+          {addingSeed && (
+            <AddSeedPanel
+              onDone={() => {
+                setAddingSeed(false);
+                setNotice('Seed added.');
+                void refresh();
+              }}
+              onCancel={() => setAddingSeed(false)}
+            />
+          )}
           {wallets.map((w) => (
             <SeedCard
               key={w.id}
@@ -326,13 +349,13 @@ export function AdvancedTab({ onRequireUnlock }: AdvancedTabProps): ReactNode {
               onRename={(name) => mutate(() => renameWallet(w.id, name))}
             />
           ))}
-          {pureKeys.length > 0 && (
-            <PureKeysPanel
-              keys={pureKeys}
-              busy={busy}
-              onRemove={(id) => mutate(() => removePureKeypair(id))}
-            />
-          )}
+          {/* Always shown: a wallet with no pure keys still needs a way to add one. */}
+          <PureKeysPanel
+            keys={pureKeys}
+            busy={busy}
+            onRemove={(id) => mutate(() => removePureKeypair(id))}
+          />
+          <AddPureKeyPanel onDone={() => void refresh()} />
         </div>
       )}
     </section>
@@ -659,6 +682,11 @@ function PureKeysPanel({
         Raw keypairs in this wallet (not derived from a seed). They sign via
         advanced accounts.
       </p>
+      {keys.length === 0 && (
+        <p className={styles.pureKeysHelp} data-testid="pure-keys-empty">
+          No pure keys yet.
+        </p>
+      )}
       <ul className={styles.pureKeyList}>
         {keys.map((k) => (
           <li

@@ -49,7 +49,15 @@ export {
   type DirtyReadResult,
 } from './fetchAccountGuard';
 
-export { isPastedKeyFormat } from './pastedKey';
+export {
+  isPastedKeyFormat,
+  validatePastedKey,
+  encryptPureKeypair,
+  generatePureKeypair,
+  type ValidatePastedKeyResult,
+  type PureKeypairRecord,
+  type GeneratedPureKeypair,
+} from './pastedKey';
 
 export {
   getAdvancedMode,

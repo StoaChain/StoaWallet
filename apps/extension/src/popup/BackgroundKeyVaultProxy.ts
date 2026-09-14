@@ -177,6 +177,38 @@ export class BackgroundKeyVaultProxy implements RemoteVault {
     return res.ok ? { ok: true } : { ok: false, reason: mapReason(res.reason) };
   }
 
+  /** Add a generated or restored seed in the worker; only the new seed id returns. */
+  async addSeed(input: {
+    phrase: string;
+    seedType: 'koala' | 'chainweaver' | 'eckowallet';
+    name: string;
+  }): Promise<{ ok: true; walletId: string } | { ok: false; reason: string }> {
+    const res = await this.send({
+      type: 'addSeed',
+      phrase: input.phrase,
+      seedType: input.seedType,
+      name: input.name,
+    });
+    return res.ok ? { ok: true, walletId: res.walletId } : { ok: false, reason: res.reason };
+  }
+
+  /** Add a generated or pasted pure keypair in the worker. */
+  async addPureKeypair(input: {
+    privateKey: string;
+    publicKey: string;
+    label?: string;
+  }): Promise<{ ok: true; id: string; publicKey: string } | { ok: false; reason: string }> {
+    const res = await this.send({
+      type: 'addPureKeypair',
+      privateKey: input.privateKey,
+      publicKey: input.publicKey,
+      ...(input.label !== undefined ? { label: input.label } : {}),
+    });
+    return res.ok
+      ? { ok: true, id: res.id, publicKey: res.publicKey }
+      : { ok: false, reason: res.reason };
+  }
+
   /**
    * Export the vault as a Codex document sealed at `exportPassword`. The worker
    * does the decrypt/re-seal; the popup only ever holds the sealed JSON.

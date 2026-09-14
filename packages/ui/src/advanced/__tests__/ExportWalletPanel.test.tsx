@@ -81,6 +81,12 @@ function makeVault(
     async removePureKeypair() {
       return { ok: true as const };
     },
+    async addSeed() {
+      return { ok: true as const, walletId: 'wallet-new' };
+    },
+    async addPureKeypair() {
+      return { ok: true as const, id: 'key-new', publicKey: 'e'.repeat(64) };
+    },
   };
   return v as RemoteVault & { exportCalls: string[] };
 }

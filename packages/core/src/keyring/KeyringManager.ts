@@ -52,8 +52,9 @@ import {
   type ImportCodexOutcome,
 } from '../codex';
 import { deriveAccounts, type AccountRecord } from './deriveAccounts';
+import { encryptPureKeypair, validatePastedKey } from '../advanced/pastedKey';
 import { decryptPhrase, encryptPhrase } from './encryptAtRest';
-import { generateMnemonic, validateMnemonic } from './mnemonic';
+import { generateMnemonic, validateMnemonic, validateMnemonicFor } from './mnemonic';
 import {
   CorruptVaultError,
   deserializeVault,
@@ -187,6 +188,37 @@ function toStoredAccount(record: AccountRecord): StoredAccount {
     derivationPath: record.derivationPath,
   };
 }
+
+/** Input to {@link KeyringManager.addSeed}. */
+export interface AddSeedInput {
+  readonly phrase: string;
+  readonly seedType: SeedType;
+  readonly name: string;
+}
+
+/** Outcome of {@link KeyringManager.addSeed}; refusals are secret-free codes. */
+export type AddSeedOutcome =
+  | { readonly ok: true; readonly walletId: string }
+  | {
+      readonly ok: false;
+      readonly reason: 'word-count' | 'invalid-words' | 'missing-name' | 'duplicate-seed';
+    };
+
+/** Input to {@link KeyringManager.addPureKeypair}. */
+export interface AddPureKeypairInput {
+  readonly privateKey: string;
+  /** The public key the private key must derive — Codex's typo guard. */
+  readonly publicKey: string;
+  readonly label?: string;
+}
+
+/** Outcome of {@link KeyringManager.addPureKeypair}; refusals are secret-free codes. */
+export type AddPureKeypairOutcome =
+  | { readonly ok: true; readonly id: string; readonly publicKey: string }
+  | {
+      readonly ok: false;
+      readonly reason: 'bad-format' | 'invalid-key' | 'key-mismatch' | 'duplicate-key';
+    };
 
 export class KeyringManager {
   private readonly storage: StorageAdapter;
@@ -674,6 +706,105 @@ export class KeyringManager {
         wallet.activeAccountIndex === index ? 0 : wallet.activeAccountIndex,
     };
     await this.persist(this.replaceWalletInVault(vault, nextWallet));
+  }
+
+  /**
+   * ADD a seed to the vault — generated in the wallet or restored from a phrase.
+   * Ported from Ouronet Codex's CreateKadenaSeedModal: the phrase is validated for
+   * the chosen seed type, Key #0 and Key #1 are derived, and the ACTIVE seed is
+   * left alone — adding a seed is not switching to it.
+   *
+   * The phrase is sealed with the held WALLET password, so this requires an
+   * unlocked wallet; the unlocked session stands in for Codex's password prompt.
+   * Checks run in Codex's order (phrase, then name) and a seed the vault already
+   * holds is refused rather than duplicated. Nothing is written on any refusal.
+   */
+  async addSeed(input: AddSeedInput): Promise<AddSeedOutcome> {
+    if (this.unlocked === null) {
+      throw new WalletLockedError();
+    }
+    const password = this.unlocked.password;
+
+    const validation = await validateMnemonicFor(input.phrase, input.seedType);
+    if (!validation.valid) {
+      return { ok: false, reason: validation.reason };
+    }
+    const name = input.name.trim();
+    if (name === '') {
+      return { ok: false, reason: 'missing-name' };
+    }
+
+    const phrase = input.phrase.trim().toLowerCase().split(/\s+/).join(' ');
+    const vault = await this.requireVault();
+    // Codex derives Key #0 and Key #1 for every seed it adds.
+    const accounts = (await deriveAccounts(phrase, password, 0, 2, input.seedType)).map(
+      toStoredAccount,
+    );
+
+    const held = new Set(vault.wallets.flatMap((w) => w.accounts.map((a) => a.publicKey)));
+    if (accounts.some((a) => held.has(a.publicKey))) {
+      return { ok: false, reason: 'duplicate-seed' };
+    }
+
+    // A seed added from inside the wallet joins it in its current mode. Advanced
+    // mode is forced on for a codex-origin active seed, so in a codex-rooted
+    // wallet the new seed is codex-origin too — switching to it must not drop
+    // the user out of the advanced view they added it from.
+    const origin = vault.wallets.find((w) => w.id === vault.activeWalletId)?.origin ?? 'seed';
+    const wallet: StoredWallet = {
+      id: this.nextWalletId(vault.wallets),
+      name,
+      encryptedPhrase: await encryptPhrase(phrase, password),
+      accounts,
+      activeAccountIndex: 0,
+      seedType: input.seedType,
+      origin,
+      createdAt: new Date().toISOString(),
+    };
+    await this.persist({ ...vault, wallets: [...vault.wallets, wallet] });
+    return { ok: true, walletId: wallet.id };
+  }
+
+  /**
+   * ADD a pure keypair — generated in the wallet (`pact -g`) or imported by pasting
+   * both halves. Ported from Codex's PureKeypairsTab: the private key must derive
+   * the public key supplied with it (64-hex Ed25519, or the 128-hex Chainweaver
+   * extended key), so a mistyped pair is refused instead of being stored unsignable.
+   *
+   * Sealed with the held wallet password (requires unlock). A key the vault
+   * already holds — as a pure key or as a seed account — is refused.
+   */
+  async addPureKeypair(input: AddPureKeypairInput): Promise<AddPureKeypairOutcome> {
+    if (this.unlocked === null) {
+      throw new WalletLockedError();
+    }
+    const password = this.unlocked.password;
+    const privateKey = input.privateKey.trim();
+
+    const validation = validatePastedKey(privateKey, [input.publicKey.trim().toLowerCase()]);
+    if (!validation.ok) {
+      return { ok: false, reason: validation.reason };
+    }
+
+    const vault = await this.requireVault();
+    const existing = pureKeypairsOf(vault);
+    const held = new Set([
+      ...existing.map((k) => k.publicKey),
+      ...vault.wallets.flatMap((w) => w.accounts.map((a) => a.publicKey)),
+    ]);
+    if (held.has(validation.publicKey)) {
+      return { ok: false, reason: 'duplicate-key' };
+    }
+
+    const label = input.label?.trim();
+    const record = await encryptPureKeypair(
+      privateKey,
+      validation.publicKey,
+      password,
+      label === undefined || label === '' ? undefined : label,
+    );
+    await this.persist({ ...vault, pureKeypairs: [...existing, record] });
+    return { ok: true, id: record.id, publicKey: record.publicKey };
   }
 
   /**

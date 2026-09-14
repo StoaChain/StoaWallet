@@ -33,6 +33,10 @@ export { encryptPhrase, decryptPhrase } from './encryptAtRest';
 export {
   generateMnemonic,
   validateMnemonic,
+  generateMnemonicFor,
+  validateMnemonicFor,
+  previewSeedPublicKey,
+  WORD_COUNT_BY_SEED_TYPE,
   type MnemonicRejection,
   type MnemonicValidation,
 } from './mnemonic';
@@ -47,6 +51,10 @@ export {
   WalletLockedError,
   VaultAlreadyExistsError,
   LastWalletError,
+  type AddSeedInput,
+  type AddSeedOutcome,
+  type AddPureKeypairInput,
+  type AddPureKeypairOutcome,
   BiometricUnlockFailedError,
   type KeyringManagerDeps,
   type OnboardOptions,

@@ -185,6 +185,18 @@ export interface RemoteVault {
   removeWallet(walletId: string): Promise<RemoteUnlockResult>;
   /** Remove a pure keypair (destroys its encrypted private key). */
   removePureKeypair(id: string): Promise<RemoteUnlockResult>;
+  /** Add a generated or restored seed, sealed in the worker. */
+  addSeed(input: {
+    phrase: string;
+    seedType: AddableSeedType;
+    name: string;
+  }): Promise<AddSeedResult>;
+  /** Add a generated or pasted pure keypair, sealed in the worker. */
+  addPureKeypair(input: {
+    privateKey: string;
+    publicKey: string;
+    label?: string;
+  }): Promise<AddPureKeypairResult>;
   /** Rename a seed (non-secret metadata); ack/failure. */
   renameWallet(walletId: string, name: string): Promise<RemoteUnlockResult>;
   /**
@@ -288,6 +300,25 @@ export type WalletActionReason =
   /** A removal was refused because it targeted the vault's last seed. */
   | 'last-wallet'
   | 'unknown';
+
+/** Seed types the wallet can add — mirrors the vault's `SeedType`. */
+export type AddableSeedType = 'koala' | 'chainweaver' | 'eckowallet';
+
+/**
+ * Outcome of adding a seed. `reason` is a secret-free code: `word-count`,
+ * `invalid-words`, `missing-name`, `duplicate-seed`, `locked` or `unknown`.
+ */
+export type AddSeedResult =
+  | { readonly ok: true; readonly walletId: string }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * Outcome of adding a pure keypair. `reason`: `bad-format`, `invalid-key`,
+ * `key-mismatch`, `duplicate-key`, `locked` or `unknown`.
+ */
+export type AddPureKeypairResult =
+  | { readonly ok: true; readonly id: string; readonly publicKey: string }
+  | { readonly ok: false; readonly reason: string };
 
 export type WalletActionResult =
   | { ok: true }
@@ -545,6 +576,24 @@ export interface WalletContextValue {
   removeWallet(walletId: string): Promise<WalletActionResult>;
   /** Remove a pure keypair, destroying its encrypted private key. */
   removePureKeypair(id: string): Promise<WalletActionResult>;
+  /**
+   * Add a seed — generated in the wallet or restored from a phrase — for the
+   * chosen seed type. Requires an unlocked wallet; the active seed is unchanged.
+   */
+  addSeed(input: {
+    phrase: string;
+    seedType: AddableSeedType;
+    name: string;
+  }): Promise<AddSeedResult>;
+  /**
+   * Add a pure keypair — generated (pact -g) or pasted. The private key must
+   * derive the given public key. Requires an unlocked wallet.
+   */
+  addPureKeypair(input: {
+    privateKey: string;
+    publicKey: string;
+    label?: string;
+  }): Promise<AddPureKeypairResult>;
   /** Rename a seed (wallet); mirrors the updated summary. */
   renameWallet(walletId: string, name: string): Promise<WalletActionResult>;
   /**
@@ -1395,6 +1444,49 @@ export function WalletProvider({
     [manager, remoteVault],
   );
 
+  const addSeed = useCallback(
+    async (input: {
+      phrase: string;
+      seedType: AddableSeedType;
+      name: string;
+    }): Promise<AddSeedResult> => {
+      try {
+        const result =
+          remoteVault !== undefined
+            ? await remoteVault.addSeed(input)
+            : await manager.addSeed(input);
+        if (result.ok) {
+          // The new seed is not active, but the seed list and header read the
+          // stored vault — re-read it so the addition shows up.
+          await refreshFromStorage();
+          if (remoteVault !== undefined) await syncRemoteSelection();
+          else syncActiveSelection();
+        }
+        return result;
+      } catch (error) {
+        return { ok: false, reason: reasonForActionError(error) };
+      }
+    },
+    [manager, refreshFromStorage, syncActiveSelection, remoteVault, syncRemoteSelection],
+  );
+
+  const addPureKeypair = useCallback(
+    async (input: {
+      privateKey: string;
+      publicKey: string;
+      label?: string;
+    }): Promise<AddPureKeypairResult> => {
+      try {
+        return remoteVault !== undefined
+          ? await remoteVault.addPureKeypair(input)
+          : await manager.addPureKeypair(input);
+      } catch (error) {
+        return { ok: false, reason: reasonForActionError(error) };
+      }
+    },
+    [manager, remoteVault],
+  );
+
   const renameWallet = useCallback(
     async (walletId: string, name: string): Promise<WalletActionResult> => {
       if (remoteVault !== undefined) {
@@ -2012,6 +2104,8 @@ export function WalletProvider({
     removeAccount,
     removeWallet,
     removePureKeypair,
+    addSeed,
+    addPureKeypair,
     renameWallet,
     importCodex,
     exportCodex,

@@ -581,6 +581,37 @@ export async function routeRequest(
         await manager.removePureKeypair(request.id);
         return ok({});
 
+      case 'addSeed': {
+        // Seals a new mnemonic with the held wallet password — gated on unlock.
+        // Validation refusals come back as a secret-free outcome, never a throw.
+        if (!keyVault.isUnlocked()) {
+          return err('locked');
+        }
+        const seedOutcome = await manager.addSeed({
+          phrase: request.phrase,
+          seedType: request.seedType,
+          name: request.name,
+        });
+        return seedOutcome.ok
+          ? ok({ walletId: seedOutcome.walletId })
+          : { ok: false, reason: seedOutcome.reason };
+      }
+
+      case 'addPureKeypair': {
+        // Seals a private key with the held wallet password — gated on unlock.
+        if (!keyVault.isUnlocked()) {
+          return err('locked');
+        }
+        const keyOutcome = await manager.addPureKeypair({
+          privateKey: request.privateKey,
+          publicKey: request.publicKey,
+          ...(request.label !== undefined ? { label: request.label } : {}),
+        });
+        return keyOutcome.ok
+          ? ok({ id: keyOutcome.id, publicKey: keyOutcome.publicKey })
+          : { ok: false, reason: keyOutcome.reason };
+      }
+
       case 'exportCodex': {
         if (!keyVault.isUnlocked()) {
           return err('locked');

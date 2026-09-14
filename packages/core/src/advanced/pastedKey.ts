@@ -22,6 +22,7 @@
  * about a mismatch uses only truncated PUBLIC keys.
  */
 import { smartEncrypt } from '@stoachain/stoa-core/crypto';
+import { genKeyPair } from '@stoachain/kadena-stoic-legacy/cryptography-utils';
 import { tryDerivePublicKey } from '@stoachain/stoa-core/guard';
 
 /** Exactly 64 OR 128 hex characters (no `0x`, no separators). */
@@ -125,4 +126,27 @@ export async function encryptPureKeypair(
   }
 
   return record;
+}
+
+/** A freshly generated pure keypair: both halves as 64-hex Ed25519. */
+export interface GeneratedPureKeypair {
+  readonly publicKey: string;
+  readonly privateKey: string;
+}
+
+/**
+ * Generate a random Ed25519 keypair — the wallet's `pact -g`.
+ *
+ * Delegates to the SDK's `genKeyPair` rather than rolling key generation, and
+ * surfaces its `secretKey` as `privateKey`, the name this module uses everywhere
+ * else. Nothing is persisted: the caller shows BOTH halves so the private key can
+ * be backed up, then saves it through the same {@link validatePastedKey} gate as
+ * a pasted key.
+ */
+export function generatePureKeypair(): GeneratedPureKeypair {
+  const { publicKey, secretKey } = genKeyPair();
+  if (secretKey === undefined) {
+    throw new Error('genKeyPair returned no secret key.');
+  }
+  return { publicKey, privateKey: secretKey };
 }

@@ -200,6 +200,20 @@ export type Request =
   | { readonly type: 'removeWallet'; readonly walletId: string }
   /** Destroys an encrypted private key — refused when locked. */
   | { readonly type: 'removePureKeypair'; readonly id: string }
+  /** Add a generated or restored seed — sealed in the worker. Refused when locked. */
+  | {
+      readonly type: 'addSeed';
+      readonly phrase: string;
+      readonly seedType: 'koala' | 'chainweaver' | 'eckowallet';
+      readonly name: string;
+    }
+  /** Add a generated or pasted pure keypair — sealed in the worker. Refused when locked. */
+  | {
+      readonly type: 'addPureKeypair';
+      readonly privateKey: string;
+      readonly publicKey: string;
+      readonly label?: string;
+    }
   | {
       readonly type: 'exportCodex';
       /** The password the EXPORT FILE is sealed at — never the wallet password. */
@@ -338,6 +352,16 @@ export type ListPureKeypairsResponse =
  * The JSON is already sealed at the export password when it crosses the wire —
  * the popup receives ciphertext, never a plaintext seed.
  */
+/** addSeed RESULT: the new seed's id, or a secret-free refusal code. */
+export type AddSeedResponse =
+  | { readonly ok: true; readonly walletId: string }
+  | { readonly ok: false; readonly reason: string };
+
+/** addPureKeypair RESULT: the stored key's id and public key, or a refusal code. */
+export type AddPureKeypairResponse =
+  | { readonly ok: true; readonly id: string; readonly publicKey: string }
+  | { readonly ok: false; readonly reason: string };
+
 export type ExportCodexResponse =
   | { readonly ok: true; readonly json: string }
   | { readonly ok: false; readonly reason: string };
@@ -423,6 +447,8 @@ export type Response =
   | ListPureKeypairsResponse
   | ImportCodexResponse
   | ExportCodexResponse
+  | AddSeedResponse
+  | AddPureKeypairResponse
   | SignTxResponse
   | SignMessageResponse
   | UrStoaOpResponse;
@@ -446,6 +472,10 @@ export type ResponseFor<T extends RequestType> = T extends 'isUnlocked'
               ? AddAccountResponse
               : T extends 'removeAccount' | 'renameWallet' | 'removeWallet' | 'removePureKeypair'
                 ? AckResponse | Failure
+                : T extends 'addSeed'
+                  ? AddSeedResponse
+                : T extends 'addPureKeypair'
+                  ? AddPureKeypairResponse
                 : T extends 'exportCodex'
                   ? ExportCodexResponse
                 : T extends 'importCodex'

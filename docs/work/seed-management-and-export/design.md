@@ -89,15 +89,37 @@ missing sits above that:
 
 ## Topics
 
-Planned in turn:
+All three are built:
 
 1. **`vault-export`** — Codex-shaped password-sealed export with progress.
    Covers AC1-AC5. Highest priority: it is the one that loses funds.
 2. **`seed-management`** — add-a-seed after onboarding plus the seed-type
-   picker. Covers AC6, AC7.
-3. **`keypair-generator`** — the `pact -g` equivalent. Covers AC8.
+   picker. Covers AC6, AC7. Ported from Ouronet Codex's `CreateKadenaSeedModal`
+   as `AddSeedPanel` in Advanced → Accounts & Seeds.
+3. **`keypair-generator`** — the `pact -g` equivalent. Covers AC8. Ported from
+   Codex's `PureKeypairsTab` as `AddPureKeyPanel`: generate, or import a pasted
+   pair.
 
 AC9 gates every topic.
+
+### Implementation notes (seed-management, keypair-generator)
+
+- **Word count is enforced before the SDK check.**
+  `KadenaWalletBuilder.isValidMnemonic(phrase, seedType)` does not check length:
+  it accepts a 24-word koala phrase as chainweaver, which would store the seed
+  under the wrong derivation. `validateMnemonicFor` rejects a wrong count as
+  `word-count` first.
+- **The seed is sealed with the unlocked session's wallet password.** Codex asks
+  for its codex password at this step; here the unlocked vault stands in for it.
+- **An added seed does not become active**, as in Codex. It gets Key #0 and
+  Key #1, and a phrase whose keys the vault already holds is refused
+  (`duplicate-seed`).
+- **An added seed takes the active seed's `origin`.** Advanced mode is forced on
+  for a codex-origin active seed. Tagging the new seed `seed` would silently
+  switch advanced mode off once the user switched to it.
+- **An imported pure key must derive its public key** (64-hex Ed25519, or the
+  128-hex Chainweaver extended key). A key already in the vault, as a pure key
+  or as a seed account, is refused (`duplicate-key`).
 
 ## Out of scope
 
